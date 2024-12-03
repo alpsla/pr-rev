@@ -277,9 +277,11 @@ export default function SettingsPage() {
 
         <div className="mt-8 text-center">
           <p className="text-sm text-muted-foreground">
-            {status === "unauthenticated" 
-              ? "Please sign in to access settings"
-              : "You're authenticated! Manage your access levels below."}
+            {(status as string) === "unauthenticated" || !session?.user?.email ? (
+              "Please sign in to access settings"
+            ) : (
+              "You're authenticated! Manage your access levels below."
+            )}
           </p>
         </div>
       </main>

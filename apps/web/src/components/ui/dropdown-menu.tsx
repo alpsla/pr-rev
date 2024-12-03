@@ -190,7 +190,7 @@ const DropdownMenuComponent = () => {
         <DropdownMenuItem>Menu Item 2</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem checked>Checkbox Item</DropdownMenuCheckboxItem>
-        <DropdownMenuRadioItem>Radio Item</DropdownMenuRadioItem>
+        <DropdownMenuRadioItem value="item">Radio Item</DropdownMenuRadioItem>
         <DropdownMenuLabel>Label</DropdownMenuLabel>
         <DropdownMenuShortcut>Ctrl + K</DropdownMenuShortcut>
       </DropdownMenuContent>
