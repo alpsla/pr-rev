@@ -11,7 +11,8 @@ export const authOptions: NextAuthOptions = {
       authorization: {
         url: "https://github.com/login/oauth/authorize",
         params: {
-          scope: 'read:user user:email repo'
+          scope: 'read:user user:email repo',
+          prompt: 'consent'
         }
       }
     }),

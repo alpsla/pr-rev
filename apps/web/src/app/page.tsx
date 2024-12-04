@@ -142,56 +142,47 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto px-4 py-8">
-        <div className="mx-auto max-w-2xl space-y-8">
-          <div className="text-center space-y-4">
-            <h1 className="text-4xl font-bold">PR Review Assistant</h1>
-            <p className="text-xl text-muted-foreground">
-              Get instant, intelligent feedback on your pull requests
-            </p>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Analyze Pull Request</CardTitle>
-              <CardDescription>
-                Enter a GitHub pull request URL to start the analysis
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="flex gap-2">
-                  <Input
-                    type="url"
-                    placeholder="https://github.com/owner/repo/pull/123"
-                    value={prUrl}
-                    onChange={(e) => setPrUrl(e.target.value)}
-                    required
-                    pattern="https://github\.com/[^/]+/[^/]+/pull/\d+"
-                    title="Please enter a valid GitHub pull request URL"
-                    className="flex-1"
-                    disabled={isLoading || !session}
-                  />
-                  <Button type="submit" disabled={isLoading || !session}>
-                    {isLoading ? (
-                      "Processing..."
-                    ) : (
-                      <>
-                        Analyze
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
-                </div>
-                {!session && (
-                  <p className="text-sm text-muted-foreground">
-                    Please sign in with GitHub to analyze pull requests
-                  </p>
+      <main className="flex-1 container mx-auto p-8">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-4xl font-bold mb-4">PR Review Assistant</h1>
+          <p className="text-xl mb-8">Get instant, intelligent feedback on your pull requests</p>
+          
+          <div className="mb-8">
+            <h2 className="text-2xl font-semibold mb-4">Analyze Pull Request</h2>
+            <p className="text-lg mb-4">Enter a GitHub pull request URL to start the analysis</p>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <Input
+                type="url"
+                placeholder="https://github.com/owner/repo/pull/123"
+                value={prUrl}
+                onChange={(e) => setPrUrl(e.target.value)}
+                required
+                pattern="https://github\.com/[^/]+/[^/]+/pull/\d+"
+                title="Please enter a valid GitHub pull request URL"
+                className="w-full p-4 text-lg border rounded-lg mb-4"
+                disabled={isLoading || !session}
+              />
+              
+              <Button type="submit" disabled={isLoading || !session}>
+                {isLoading ? (
+                  "Processing..."
+                ) : (
+                  <>
+                    Analyze
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </>
                 )}
-              </form>
-            </CardContent>
-          </Card>
-
+              </Button>
+            </form>
+            
+            {!session && (
+              <p className="text-sm text-muted-foreground">
+                Please sign in with GitHub to analyze pull requests
+              </p>
+            )}
+          </div>
+          
           <div className="grid gap-6 md:grid-cols-3">
             <Card>
               <CardHeader>
