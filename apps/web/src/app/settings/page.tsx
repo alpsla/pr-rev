@@ -3,13 +3,15 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { ProfileDisplay } from "@/components/profile-display";
 import { useToast } from "@/components/ui/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { signOut, signIn } from "next-auth/react";
 
@@ -185,6 +187,38 @@ export default function SettingsPage() {
     return 'Currently restricted to public repositories only.';
   };
 
+  const handleUpgrade = async () => {
+    try {
+      setIsLoading(true);
+      // For now, this will just re-request GitHub permissions
+      // In the future, this could integrate with a payment system
+      const response = await fetch('/api/settings/upgrade-access', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upgrade access');
+      }
+
+      // Refresh GitHub permissions
+      await fetchGithubPermissions();
+      
+      toast({
+        title: "Access Upgraded",
+        description: "You now have access to private repositories",
+      });
+    } catch (error) {
+      console.error('Failed to upgrade access:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upgrade access. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (status === 'loading') {
     return <div>Loading...</div>;
   }
@@ -273,13 +307,67 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+          <div className="mt-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>Access Level</CardTitle>
+                <CardDescription>
+                  Manage your access to private repositories
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-medium">Current Plan</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {githubStatus?.plan === 'free' ? 'Basic Access' : 'Pro Access'}
+                    </p>
+                  </div>
+                  <Badge variant={githubStatus?.hasPrivateAccess ? "default" : "secondary"}>
+                    {githubStatus?.hasPrivateAccess ? 'Private Access' : 'Public Only'}
+                  </Badge>
+                </div>
+
+                <div className="border rounded-lg p-4">
+                  <h4 className="font-medium mb-2">Pro Access Features</h4>
+                  <ul className="space-y-2">
+                    <li className="flex items-center text-sm">
+                      <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                      Access to private repositories
+                    </li>
+                    <li className="flex items-center text-sm">
+                      <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                      Organization repository support
+                    </li>
+                    <li className="flex items-center text-sm">
+                      <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                      Advanced analytics and insights
+                    </li>
+                  </ul>
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button 
+                  onClick={() => handleUpgrade()}
+                  disabled={isLoading || githubStatus?.hasPrivateAccess}
+                  className="w-full"
+                >
+                  {githubStatus?.hasPrivateAccess 
+                    ? 'Already on Pro Plan' 
+                    : 'Upgrade to Pro Access'}
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
         </div>
 
         <div className="mt-8 text-center">
           <p className="text-sm text-muted-foreground">
-            {status === "unauthenticated" 
-              ? "Please sign in to access settings"
-              : "You're authenticated! Manage your access levels below."}
+            {(status as string) === "unauthenticated" || !session?.user?.email ? (
+              "Please sign in to access settings"
+            ) : (
+              "You're authenticated! Manage your access levels below."
+            )}
           </p>
         </div>
       </main>

@@ -34,6 +34,11 @@
     --ring: 215 20.2% 65.1%;
 
     --radius: 0.5rem;
+
+    --font-size-base: 16px;
+    --font-size-lg: 18px;
+    --font-size-xl: 24px;
+    --font-size-2xl: 32px;
   }
 
   .dark {
@@ -74,5 +79,23 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  html {
+    font-size: var(--font-size-base);
+  }
+  h1 {
+    font-size: var(--font-size-2xl);
+    margin-bottom: 1rem;
+  }
+  h2 {
+    font-size: var(--font-size-xl);
+    margin-bottom: 0.75rem;
+  }
+  p, input, button {
+    font-size: var(--font-size-lg);
+  }
+  .error-message {
+    font-size: var(--font-size-lg);
+    color: #ff4444;
   }
 }
