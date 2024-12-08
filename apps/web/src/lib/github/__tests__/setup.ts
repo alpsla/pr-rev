@@ -1,127 +1,193 @@
-import { jest } from '@jest/globals';
+// apps/web/src/lib/github/__tests__/setup.ts
 import { Octokit } from '@octokit/rest';
-import type { PaginateInterface } from '@octokit/plugin-paginate-rest';
-import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-methods';
-import type { OctokitResponse, RequestParameters } from '@octokit/types';
-import type { PrismaClient } from '../types';
-import { createRequestMock, createGraphQLMock } from './mocks';
+import { paginateRest } from '@octokit/plugin-paginate-rest';
+import { restEndpointMethods } from '@octokit/plugin-rest-endpoint-methods';
+import { createGraphQLMock } from './mocks/graphql'; 
+import {
+    RestEndpointMethodTypes
+} from '@octokit/plugin-rest-endpoint-methods/dist-types/generated/parameters-and-response-types';
 
-// Types
-export type OctokitMock = Pick<Octokit, 'request' | 'graphql' | 'paginate'> & {
+// ... other imports if any
+
+
+const MyOctokit = Octokit.plugin(paginateRest, restEndpointMethods);
+const octokit = new MyOctokit();
+
+// Create alias for the GitHub API client type
+type OctokitClient = typeof octokit.rest;
+
+
+export interface OctokitMock {
+  request: jest.MockedFunction<typeof octokit.request>;
+  graphql: jest.MockedFunction<typeof octokit.graphql>;
+  paginate: jest.MockedFunction<typeof octokit.paginate>;
   rest: {
     apps: {
-      createInstallationAccessToken: RestEndpointMethodTypes['apps']['createInstallationAccessToken']
-    },
+      createInstallationAccessToken: OctokitClient['apps']['createInstallationAccessToken'];
+    };
     actions: {
-      addCustomLabelsToSelfHostedRunnerForOrg: RestEndpointMethodTypes['actions']['addCustomLabelsToSelfHostedRunnerForOrg'],
-      addCustomLabelsToSelfHostedRunnerForRepo: RestEndpointMethodTypes['actions']['addCustomLabelsToSelfHostedRunnerForRepo'],
-      addSelectedRepoToOrgSecret: RestEndpointMethodTypes['actions']['addSelectedRepoToOrgSecret'],
-      addSelectedRepoToOrgVariable: RestEndpointMethodTypes['actions']['addSelectedRepoToOrgVariable'],
-      approveWorkflowRun: RestEndpointMethodTypes['actions']['approveWorkflowRun'],
-      cancelWorkflowRun: RestEndpointMethodTypes['actions']['cancelWorkflowRun']
-    }
-  }
-};
+      addCustomLabelsToSelfHostedRunnerForOrg: OctokitClient['actions']['addCustomLabelsToSelfHostedRunnerForOrg'];
+      addCustomLabelsToSelfHostedRunnerForRepo: OctokitClient['actions']['addCustomLabelsToSelfHostedRunnerForRepo'];
+      addSelectedRepoToOrgSecret: OctokitClient['actions']['addSelectedRepoToOrgSecret'];
+      addSelectedRepoToOrgVariable: OctokitClient['actions']['addSelectedRepoToOrgVariable'];
+      approveWorkflowRun: OctokitClient['actions']['approveWorkflowRun'];
+      cancelWorkflowRun: OctokitClient['actions']['cancelWorkflowRun'];
+    };
+  };
+}
 
-export type PrismaMockClient = jest.MockedObject<PrismaClient>;
-
-// Factory function to create properly typed mock
-export function createMockOctokit(): OctokitMock {
-  const request = createRequestMock();
-  const graphql = createGraphQLMock();
-
-  // Create paginate mock
+export const createMockOctokit = (): OctokitMock => {
+  const request = jest.fn();
   const paginateMock = Object.assign(
     jest.fn().mockImplementation(() => Promise.resolve([])),
     {
       iterator: jest.fn().mockImplementation(() => ({
         [Symbol.asyncIterator]: () => ({
-          next: () => Promise.resolve({ done: true, value: undefined })
-        })
-      }))
-    }
-  ) as unknown as PaginateInterface & jest.Mock;
+          next: () => Promise.resolve({ done: true, value: undefined }),
+        }),
+      })),
+    },
+  ) as unknown as jest.MockedFunction<typeof octokit.paginate>;
 
-  // Create installation token mock with proper typing
   const createInstallationAccessToken = Object.assign(
-    jest.fn().mockImplementation(
-      (params: RestEndpointMethodTypes['apps']['createInstallationAccessToken']['parameters']) => 
-        Promise.resolve({
-          data: {
-            token: 'mock-token',
-            expires_at: new Date(Date.now() + 3600000).toISOString(),
-            permissions: {
-              metadata: 'read',
-              pull_requests: 'write'
-            },
-            repository_selection: 'all',
-            repositories: []
+    jest.fn().mockImplementation((params: RestEndpointMethodTypes['apps']['createInstallationAccessToken']['parameters']) =>
+      Promise.resolve({
+        data: {
+          token: 'mock-token',
+          expires_at: new Date(Date.now() + 3600000).toISOString(),
+          permissions: {
+            metadata: 'read',
+            pull_requests: 'write',
           },
-          status: 201,
-          url: `https://api.github.com/app/installations/${params.installation_id}/access_tokens`,
-          headers: {}
-        } as RestEndpointMethodTypes['apps']['createInstallationAccessToken']['response'])
+          repository_selection: 'all',
+          repositories: [],
+        },
+        status: 201,
+        url: `https://api.github.com/app/installations/${params.installation_id}/access_tokens`,
+        headers: {},
+      } as RestEndpointMethodTypes['apps']['createInstallationAccessToken']['response']),
     ),
     {
-      endpoint: {
-        DEFAULTS: {
-          method: 'POST',
-          baseUrl: 'https://api.github.com',
-          headers: {
-            accept: 'application/vnd.github.v3+json',
-            'user-agent': 'octokit-test'
+      endpoint: octokit.rest.apps.createInstallationAccessToken.endpoint,
+      defaults: jest.fn(),
+    },
+  ) as unknown as OctokitClient['apps']['createInstallationAccessToken'];
+
+  //  rest of mock implementation:
+  const addCustomLabelsToSelfHostedRunnerForOrg = jest
+    .fn()
+    .mockImplementation(
+      (
+        params: RestEndpointMethodTypes['actions']['addCustomLabelsToSelfHostedRunnerForOrg']['parameters'],
+      ) =>
+        Promise.resolve({
+          status: 200,
+          url: '',
+          headers: {},
+          data: {
+            total_count: 1,
+            labels: [
+              {
+                id: 123,
+                name: 'test',
+                color: 'ffffff',
+                description: 'Test label',
+              },
+            ],
           },
-          mediaType: {
-            format: '',
-            previews: []
-          }
+        } as RestEndpointMethodTypes['actions']['addCustomLabelsToSelfHostedRunnerForOrg']['response']),
+    ) as unknown as OctokitClient['actions']['addCustomLabelsToSelfHostedRunnerForOrg'];
+
+  const addCustomLabelsToSelfHostedRunnerForRepo = jest
+    .fn()
+    .mockImplementation(
+      (
+        params: RestEndpointMethodTypes['actions']['addCustomLabelsToSelfHostedRunnerForRepo']['parameters'],
+      ) =>
+        Promise.resolve({
+          status: 200,
+          url: '',
+          headers: {},
+          data: {
+            total_count: 1,
+            labels: [
+              {
+                id: 123,
+                name: 'test',
+                color: 'ffffff',
+                description: 'Test label',
+              },
+            ],
+          },
+        } as RestEndpointMethodTypes['actions']['addCustomLabelsToSelfHostedRunnerForRepo']['response']),
+    ) as unknown as OctokitClient['actions']['addCustomLabelsToSelfHostedRunnerForRepo'];
+
+  const addSelectedRepoToOrgSecret = jest
+    .fn()
+    .mockImplementation(
+      (params: RestEndpointMethodTypes['actions']['addSelectedRepoToOrgSecret']['parameters']) =>
+        Promise.resolve({
+          status: 204,
+          url: '',
+          headers: {},
+          data: null,
+        } as RestEndpointMethodTypes['actions']['addSelectedRepoToOrgSecret']['response']),
+    ) as unknown as OctokitClient['actions']['addSelectedRepoToOrgSecret'];
+
+  const addSelectedRepoToOrgVariable = jest
+    .fn()
+    .mockImplementation(
+      (params: RestEndpointMethodTypes['actions']['addSelectedRepoToOrgVariable']['parameters']) =>
+        Promise.resolve({
+          status: 204,
+          url: '',
+          headers: {},
+          data: null,
+        } as RestEndpointMethodTypes['actions']['addSelectedRepoToOrgVariable']['response']),
+    ) as unknown as OctokitClient['actions']['addSelectedRepoToOrgVariable'];
+
+  const approveWorkflowRun = jest
+    .fn()
+    .mockImplementation(
+      (params: RestEndpointMethodTypes['actions']['approveWorkflowRun']['parameters']) =>
+        Promise.resolve({
+          status: 201,
+          url: '',
+          headers: {},
+          data: {},
+        } as RestEndpointMethodTypes['actions']['approveWorkflowRun']['response']),
+    ) as unknown as OctokitClient['actions']['approveWorkflowRun'];
+
+  const cancelWorkflowRun = jest
+    .fn()
+    .mockImplementation(
+      (params: RestEndpointMethodTypes['actions']['cancelWorkflowRun']['parameters']) =>
+        Promise.resolve({
+          status: 202,
+          url: '',
+          headers: {},
+          data: {},
+        } as RestEndpointMethodTypes['actions']['cancelWorkflowRun']['response']),
+    ) as unknown as OctokitClient['actions']['cancelWorkflowRun'];
+
+    const mockOctokit: OctokitMock = {
+      request,
+      graphql: createGraphQLMock(), // Changed here
+      paginate: paginateMock,
+      rest: {
+        apps: {
+          createInstallationAccessToken,
         },
-        defaults: jest.fn(),
-        merge: jest.fn(),
-        parse: jest.fn()
+        actions: {
+          addCustomLabelsToSelfHostedRunnerForOrg,
+          addCustomLabelsToSelfHostedRunnerForRepo,
+          addSelectedRepoToOrgSecret,
+          addSelectedRepoToOrgVariable,
+          approveWorkflowRun,
+          cancelWorkflowRun,
+        },
       },
-      defaults: jest.fn()
-    }
-  ) as unknown as RestEndpointMethodTypes['apps']['createInstallationAccessToken'];
-
-  const mockOctokit: OctokitMock = {
-    request,
-    graphql,
-    paginate: paginateMock,
-    rest: {
-      apps: {
-        createInstallationAccessToken
-      },
-      actions: {
-        addCustomLabelsToSelfHostedRunnerForOrg: jest.fn(),
-        addCustomLabelsToSelfHostedRunnerForRepo: jest.fn(),
-        addSelectedRepoToOrgSecret: jest.fn(),
-        addSelectedRepoToOrgVariable: jest.fn(),
-        approveWorkflowRun: jest.fn(),
-        cancelWorkflowRun: jest.fn()
-      }
-    }
-  };
-
-  return mockOctokit;
-}
-
-// Mock rate limit response
-export const mockRateLimitResponse = {
-  resources: {
-    core: {
-      limit: 5000,
-      used: 0,
-      remaining: 5000,
-      reset: Math.floor(Date.now() / 1000 + 3600)
-    }
-  }
+    };
+  
+    return mockOctokit;
 };
-
-// Create properly typed mock instance
-export const mockOctokitInstance = createMockOctokit() as unknown as jest.Mocked<Octokit>;
-
-// Mock Octokit constructor
-jest.mock('@octokit/rest', () => ({
-  Octokit: jest.fn(() => mockOctokitInstance)
-}));

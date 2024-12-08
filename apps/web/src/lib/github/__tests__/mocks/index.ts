@@ -1,70 +1,75 @@
-import type { RequestParameters } from '@octokit/types';
-import type { OctokitResponse } from './utils';
-import { createTypedMock } from './utils';
+import { createRequestMock } from './request';
+import { createGraphQLMock } from './graphql';
+import { createPullRequestResponse } from './pullRequest';
+import type { PullRequestParams, PullRequestResponse } from './pullRequest';
+import type { PullRequestWebhookPayload, ReviewWebhookPayload } from '../../types';
 
-// Types
-export type InstallationTokenParams = RequestParameters & {
-  installation_id: number;
-  repositories?: string[];
-  repository_ids?: number[];
-  permissions?: {
-    actions?: 'write' | 'read';
-    administration?: 'write' | 'read';
-    checks?: 'write' | 'read';
-    contents?: 'write' | 'read';
-    deployments?: 'write' | 'read';
-    environments?: 'write' | 'read';
-    issues?: 'write' | 'read';
-    metadata?: 'write' | 'read';
-    packages?: 'write' | 'read';
-    pages?: 'write' | 'read';
-    pull_requests?: 'write' | 'read';
-    repository_hooks?: 'write' | 'read';
-    repository_projects?: 'write' | 'read';
-    security_events?: 'write' | 'read';
-    statuses?: 'write' | 'read';
-    vulnerability_alerts?: 'write' | 'read';
-    workflows?: 'write' | 'read';
-  };
-};
-
-export type InstallationTokenResponse = OctokitResponse<{
-  token: string;
-  expires_at: string;
-  permissions: {
-    pull_requests: 'write';
-    metadata: 'read';
-  };
-  repository_selection: 'all';
-  repositories: [];
-}, 201>;
-
-// Create installation token mock
-export const createInstallationAccessToken = createTypedMock<
-  InstallationTokenParams,
-  InstallationTokenResponse
->((params) => 
-  Promise.resolve({
-    data: {
-      token: 'test-token',
-      expires_at: '2024-01-01T00:00:00Z',
-      permissions: {
-        pull_requests: 'write',
-        metadata: 'read'
-      },
-      repository_selection: 'all',
-      repositories: []
+// Create mock webhook payloads
+export function createPullRequestWebhookPayload(params: {
+  action: string;
+  number: number;
+  title: string;
+  owner: string;
+  repo: string;
+}): PullRequestWebhookPayload {
+  return {
+    action: params.action,
+    repository: {
+      full_name: `${params.owner}/${params.repo}`
     },
-    status: 201,
-    url: `https://api.github.com/app/installations/${params.installation_id}/access_tokens`,
-    headers: {
-      'x-github-media-type': 'github.v3; format=json',
-      'x-ratelimit-limit': '5000',
-      'x-ratelimit-remaining': '4999',
-      'x-ratelimit-reset': Math.floor(Date.now() / 1000 + 3600).toString()
+    pull_request: {
+      number: params.number,
+      title: params.title,
+      body: '',
+      state: 'open',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      merged_at: null,
+      draft: false,
+      mergeable: true,
+      rebaseable: true,
+      labels: [],
+      user: {
+        login: params.owner,
+        avatar_url: ''
+      }
     }
-  } as InstallationTokenResponse)
-);
+  };
+}
 
-export { createRequestMock } from './request';
-export { createGraphQLMock } from './graphql';
+export function createReviewWebhookPayload(params: {
+  action: string;
+  state: string;
+  number: number;
+  owner: string;
+  repo: string;
+}): ReviewWebhookPayload {
+  return {
+    action: params.action,
+    repository: {
+      full_name: `${params.owner}/${params.repo}`
+    },
+    pull_request: {
+      number: params.number
+    },
+    review: {
+      id: 1,
+      user: {
+        login: params.owner,
+        avatar_url: ''
+      },
+      body: null,
+      state: params.state as 'PENDING' | 'COMMENTED' | 'APPROVED' | 'CHANGES_REQUESTED' | 'DISMISSED',
+      submitted_at: new Date().toISOString(),
+      commit_id: 'mock-commit-id'
+    }
+  };
+}
+
+export {
+  createRequestMock,
+  createGraphQLMock,
+  createPullRequestResponse,
+  type PullRequestParams,
+  type PullRequestResponse
+};
