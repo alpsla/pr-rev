@@ -1,28 +1,29 @@
 import { jest } from '@jest/globals';
 import { GitHubService } from '../api';
-import { createOctokitMock, createMockResponse } from './mocks/helpers';
 import { mockPrismaClient } from './mocks/prisma';
-import type { RestEndpointMethodTypes } from '@octokit/rest';
-
-type RepoGetResponse = RestEndpointMethodTypes['repos']['get']['response'];
-type RepoData = RepoGetResponse['data'];
-
-jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn(() => mockPrismaClient)
-}));
+import { Octokit } from '@octokit/rest';
+import { 
+  createOctokitMocks, 
+  createMockResponse, 
+  createRateLimitResponse, 
+  type RepoData 
+} from './mocks/helpers';
 
 describe('GitHubService', () => {
   let service: GitHubService;
-  let octokit: ReturnType<typeof createOctokitMock>;
+  const { mocks } = createOctokitMocks();
 
   beforeEach(() => {
-    octokit = createOctokitMock();
-    // Using type assertion for the mock client
-    // This is safe in tests as we're only using a subset of PrismaClient functionality
+    // Reset all mocks
+    jest.clearAllMocks();
+
+    // Set up rate limit mock
+    mocks.mockRateLimitGet.mockImplementation(() => Promise.resolve(createMockResponse(createRateLimitResponse())));
+    
     service = new GitHubService(
       // @ts-expect-error - Mock client doesn't implement all PrismaClient methods
       mockPrismaClient,
-      octokit,
+      new Octokit(),
       {
         type: 'token',
         credentials: { token: 'test-token' }
@@ -32,7 +33,6 @@ describe('GitHubService', () => {
 
   afterEach(async () => {
     await service.destroy();
-    jest.clearAllMocks();
   });
 
   const createBasicMockRepo = (overrides: Partial<RepoData> = {}): RepoData => ({
@@ -163,14 +163,13 @@ describe('GitHubService', () => {
   describe('Repository Operations', () => {
     test('fetches repository information', async () => {
       const mockRepo = createBasicMockRepo();
-      const mockFn = octokit.rest.repos.get as jest.MockedFunction<typeof octokit.rest.repos.get>;
-      mockFn.mockResolvedValueOnce(createMockResponse(mockRepo));
+      mocks.mockReposGet.mockImplementation(() => Promise.resolve(createMockResponse(mockRepo)));
 
       const repo = await service.getRepository('test-owner', 'test-repo');
       expect(repo).toBeDefined();
       expect(repo.name).toBe('test-repo');
       expect(repo.fullName).toBe('test-owner/test-repo');
-      expect(mockFn).toHaveBeenCalledWith({
+      expect(mocks.mockReposGet).toHaveBeenCalledWith({
         owner: 'test-owner',
         repo: 'test-repo'
       });
@@ -179,8 +178,7 @@ describe('GitHubService', () => {
     test('handles repository not found error', async () => {
       const error = new Error('Not Found');
       Object.assign(error, { status: 404 });
-      const mockFn = octokit.rest.repos.get as jest.MockedFunction<typeof octokit.rest.repos.get>;
-      mockFn.mockRejectedValueOnce(error);
+      mocks.mockReposGet.mockImplementation(() => Promise.reject(error));
       await expect(service.getRepository('test-owner', 'test-repo'))
         .rejects.toThrow('Not Found');
     });
@@ -192,14 +190,13 @@ describe('GitHubService', () => {
       Object.assign(rateLimitError, { status: 403 });
 
       const mockRepo = createBasicMockRepo();
-      const mockFn = octokit.rest.repos.get as jest.MockedFunction<typeof octokit.rest.repos.get>;
-      mockFn
-        .mockRejectedValueOnce(rateLimitError)
-        .mockResolvedValueOnce(createMockResponse(mockRepo));
+      mocks.mockReposGet
+        .mockImplementationOnce(() => Promise.reject(rateLimitError))
+        .mockImplementationOnce(() => Promise.resolve(createMockResponse(mockRepo)));
 
       const repo = await service.getRepository('test-owner', 'test-repo');
       expect(repo).toBeDefined();
-      expect(mockFn).toHaveBeenCalledTimes(2);
+      expect(mocks.mockReposGet).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -207,16 +204,14 @@ describe('GitHubService', () => {
     test('handles network errors', async () => {
       const networkError = new Error('Network error');
       Object.assign(networkError, { status: 500 });
-      const mockFn = octokit.rest.repos.get as jest.MockedFunction<typeof octokit.rest.repos.get>;
-      mockFn.mockRejectedValueOnce(networkError);
+      mocks.mockReposGet.mockImplementation(() => Promise.reject(networkError));
 
       await expect(service.getRepository('test-owner', 'test-repo'))
         .rejects.toThrow('Network error');
     });
 
     test('handles invalid responses', async () => {
-      const mockFn = octokit.rest.repos.get as jest.MockedFunction<typeof octokit.rest.repos.get>;
-      mockFn.mockResolvedValueOnce(createMockResponse({} as RepoData));
+      mocks.mockReposGet.mockImplementation(() => Promise.resolve(createMockResponse({} as RepoData)));
 
       await expect(service.getRepository('test-owner', 'test-repo'))
         .rejects.toThrow();

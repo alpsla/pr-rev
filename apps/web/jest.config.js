@@ -1,6 +1,5 @@
 /** @type {import('@jest/types').Config.InitialOptions} */
-const config = {
-  preset: 'ts-jest',
+module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts'],
@@ -10,17 +9,20 @@ const config = {
   coverageReporters: ['text', 'lcov'],
   verbose: true,
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: 'tsconfig.json'
-    }]
+    '^.+\\.(ts|tsx|js|jsx)$': [
+      'babel-jest',
+      {
+        presets: [
+          ['@babel/preset-env', {
+            targets: { node: 'current' }
+          }],
+          '@babel/preset-typescript'
+        ]
+      }
+    ]
   },
-  transformIgnorePatterns: [
-    '/node_modules/(?!(@octokit)/)'
-  ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
   setupFiles: ['<rootDir>/src/lib/github/__tests__/setup.ts']
 };
-
-module.exports = config;

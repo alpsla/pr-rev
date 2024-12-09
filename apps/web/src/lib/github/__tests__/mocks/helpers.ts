@@ -1,44 +1,75 @@
 import { jest } from '@jest/globals';
-import type { Octokit } from '@octokit/rest';
-import type { OctokitResponse } from '@octokit/types';
+import type { RestEndpointMethodTypes } from '@octokit/rest';
 
-export const createMockResponse = <T>(data: T): OctokitResponse<T, 200> => ({
+type RepoGetResponse = RestEndpointMethodTypes['repos']['get']['response'];
+export type RepoData = RepoGetResponse['data'];
+
+export type MockResponse<T> = {
+  data: T;
+  status: number;
+  url: string;
+  headers: {
+    'x-ratelimit-limit': string;
+    'x-ratelimit-remaining': string;
+    'x-ratelimit-reset': string;
+  };
+};
+
+export const createMockResponse = <T>(data: T): MockResponse<T> => ({
   data,
   status: 200,
   url: 'https://api.github.com/test',
   headers: {
-    'x-github-media-type': 'github.v3; format=json',
     'x-ratelimit-limit': '5000',
     'x-ratelimit-remaining': '4999',
     'x-ratelimit-reset': Math.floor(Date.now() / 1000 + 3600).toString()
   }
 });
 
-type JestMockWithEndpoint = jest.Mock & {
-  endpoint: {
-    merge: jest.Mock;
-    parse: jest.Mock;
-    defaults: jest.Mock;
-  };
-  defaults: jest.Mock;
-};
-
-const createEndpointDefaults = () => ({
-  merge: jest.fn(),
-  parse: jest.fn(),
-  defaults: jest.fn()
-});
-
-const createMockFunction = (): JestMockWithEndpoint => {
-  const fn = jest.fn() as JestMockWithEndpoint;
-  fn.endpoint = createEndpointDefaults();
-  fn.defaults = jest.fn().mockReturnValue(fn);
-  return fn;
-};
-
-const rateLimitData = {
+export type RateLimitResponse = {
   resources: {
     core: {
+      limit: number;
+      remaining: number;
+      reset: number;
+      used: number;
+    };
+    search: {
+      limit: number;
+      remaining: number;
+      reset: number;
+      used: number;
+    };
+    graphql: {
+      limit: number;
+      remaining: number;
+      reset: number;
+      used: number;
+    };
+  };
+  rate: {
+    limit: number;
+    remaining: number;
+    reset: number;
+    used: number;
+  };
+};
+
+export const createRateLimitResponse = (): RateLimitResponse => ({
+  resources: {
+    core: {
+      limit: 5000,
+      remaining: 4999,
+      reset: Math.floor(Date.now() / 1000 + 3600),
+      used: 1
+    },
+    search: {
+      limit: 30,
+      remaining: 29,
+      reset: Math.floor(Date.now() / 1000 + 3600),
+      used: 1
+    },
+    graphql: {
       limit: 5000,
       remaining: 4999,
       reset: Math.floor(Date.now() / 1000 + 3600),
@@ -51,58 +82,46 @@ const rateLimitData = {
     reset: Math.floor(Date.now() / 1000 + 3600),
     used: 1
   }
+});
+
+export type MockFunctions = {
+  mockReposGet: jest.Mock;
+  mockRateLimitGet: jest.Mock;
 };
 
-export const createOctokitMock = () => {
-  const rateLimitFn = jest.fn() as jest.MockedFunction<() => Promise<OctokitResponse<typeof rateLimitData, 200>>>;
-  rateLimitFn.mockResolvedValue(createMockResponse(rateLimitData));
+export type MockOctokit = {
+  rest: {
+    repos: {
+      get: jest.Mock;
+    };
+  };
+  rateLimit: {
+    get: jest.Mock;
+  };
+};
 
-  const authFn = jest.fn() as jest.MockedFunction<() => Promise<{ type: string; token: string; }>>;
-  authFn.mockResolvedValue({ type: 'token', token: 'test-token' });
+export const createOctokitMocks = () => {
+  const mockReposGet = jest.fn();
+  const mockRateLimitGet = jest.fn();
 
-  const mock = {
+  const mocks: MockFunctions = {
+    mockReposGet,
+    mockRateLimitGet
+  };
+
+  const mockOctokit: MockOctokit = {
     rest: {
-      pulls: {
-        get: createMockFunction(),
-        listReviews: createMockFunction(),
-        listReviewComments: createMockFunction(),
-        create: createMockFunction(),
-        update: createMockFunction(),
-        list: createMockFunction(),
-        merge: createMockFunction(),
-        checkIfMerged: createMockFunction()
-      },
       repos: {
-        get: createMockFunction(),
-        listForOrg: createMockFunction(),
-        listCommits: createMockFunction(),
-        getBranch: createMockFunction(),
-        listBranches: createMockFunction(),
-        createCommitComment: createMockFunction(),
-        listCommitComments: createMockFunction()
-      },
-      issues: {
-        create: createMockFunction(),
-        createComment: createMockFunction(),
-        listComments: createMockFunction(),
-        update: createMockFunction()
+        get: mockReposGet
       }
     },
     rateLimit: {
-      get: rateLimitFn
-    },
-    request: createMockFunction(),
-    paginate: Object.assign(createMockFunction(), {
-      iterator: createMockFunction()
-    }),
-    hook: {
-      before: createMockFunction(),
-      after: createMockFunction(),
-      error: createMockFunction(),
-      wrap: createMockFunction()
-    },
-    auth: authFn
+      get: mockRateLimitGet
+    }
   };
 
-  return mock as unknown as Octokit;
+  return {
+    mocks,
+    mockOctokit
+  };
 };
