@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Github, ArrowRight, Settings, Code, GitPullRequest, Zap } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowRight, Settings, Code, GitPullRequest, Zap } from "lucide-react";
 import { AuthButton } from "@/components/auth/auth-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -29,41 +29,7 @@ export default function HomePage() {
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [permissionMessage, setPermissionMessage] = useState('');
 
-  const checkRepositoryAccess = async (url: string) => {
-    try {
-      const response = await fetch('/api/github/check-access', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to check repository access');
-      }
-
-      const data = await response.json();
-      
-      if (data.needsAccess) {
-        setPermissionMessage(data.message);
-        setShowPermissionDialog(true);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error checking repository access:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to check repository access. Please try again.",
-      });
-      return false;
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!session) {
       toast({
@@ -86,11 +52,37 @@ export default function HomePage() {
       }
 
       // Check repository access
-      const hasAccess = await checkRepositoryAccess(prUrl);
-      if (hasAccess) {
+      try {
+        const response = await fetch('/api/github/check-access', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url: prUrl }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to check repository access');
+        }
+
+        const data = await response.json();
+        
+        if (data.needsAccess) {
+          setPermissionMessage(data.message);
+          setShowPermissionDialog(true);
+          return;
+        }
+
         // Store URL and proceed to review
         sessionStorage.setItem('pendingPrUrl', prUrl);
         router.push(`/review?pr=${encodeURIComponent(prUrl)}`);
+      } catch (error) {
+        console.error('Error checking repository access:', error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to check repository access. Please try again.",
+        });
       }
     } catch (error) {
       console.error('Error processing PR URL:', error);
@@ -102,7 +94,7 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [session, prUrl, router, toast, setPermissionMessage, setShowPermissionDialog]);
 
   const handlePermissionUpgrade = () => {
     // Store the PR URL before redirecting
@@ -117,9 +109,16 @@ export default function HomePage() {
     const pendingPrUrl = sessionStorage.getItem('pendingPrUrl');
     if (pendingPrUrl && session?.user?.hasPrivateAccess) {
       setPrUrl(pendingPrUrl);
-      handleSubmit(new Event('submit') as any);
+      // Create a synthetic submit event
+      const form = document.createElement('form');
+      const submitEvent = new SubmitEvent('submit', {
+        bubbles: true,
+        cancelable: true
+      });
+      form.dispatchEvent(submitEvent);
+      handleSubmit(submitEvent as unknown as React.FormEvent<HTMLFormElement>);
     }
-  }, [session]);
+  }, [session, handleSubmit, prUrl]);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -133,7 +132,7 @@ export default function HomePage() {
             <AuthButton />
             {session && (
               <Link href="/settings">
-                <Button variant="outline" size="icon">
+                <Button className="h-8 w-8 p-0">
                   <Settings className="h-4 w-4" />
                 </Button>
               </Link>
@@ -236,7 +235,7 @@ export default function HomePage() {
             <DialogDescription>{permissionMessage}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPermissionDialog(false)}>
+            <Button className="mr-2" onClick={() => setShowPermissionDialog(false)}>
               Cancel
             </Button>
             <Button onClick={handlePermissionUpgrade}>

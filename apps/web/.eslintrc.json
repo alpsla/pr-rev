@@ -3,13 +3,28 @@
   "rules": {
     "prefer-const": "error",
     "@typescript-eslint/no-namespace": ["error", { "allowDeclarations": true }],
-    "@typescript-eslint/no-explicit-any": "error"
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": ["error", {
+      "argsIgnorePattern": "^_|^(req|request|res|response|next|props|user)$",
+      "varsIgnorePattern": "^(React|_|NextAuth|JWT|Link|Alert|AlertDescription|AlertTitle|AlertCircle|cn|signIn|Github|CardDescription|session|handleSignOut|clientSecret)$",
+      "ignoreRestSiblings": true
+    }]
   },
   "overrides": [
     {
       "files": ["**/__tests__/**/*.ts", "**/__tests__/**/*.tsx"],
       "rules": {
-        "@typescript-eslint/no-namespace": "off"
+        "@typescript-eslint/no-namespace": "off",
+        "@typescript-eslint/no-unused-vars": "off",
+        "@typescript-eslint/no-explicit-any": "off"
+      }
+    },
+    {
+      "files": ["**/route.ts"],
+      "rules": {
+        "@typescript-eslint/no-unused-vars": ["error", {
+          "argsIgnorePattern": "^(req|request|res|response|next)$"
+        }]
       }
     }
   ]

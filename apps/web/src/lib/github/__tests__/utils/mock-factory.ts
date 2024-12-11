@@ -1,28 +1,19 @@
 import type { RestEndpointMethodTypes } from '@octokit/rest';
 import type { Octokit } from '@octokit/rest';
 import type { PrismaClient } from '@prisma/client';
+import type { MockGitHubUser, MockRepository, MockPullRequest } from './mock-types';
+import { 
+  mockRateLimitExceededError,
+  mockNotFoundError,
+  mockAuthenticationError,
+  mockNetworkError,
+  mockServerError
+} from '../mocks/responses';
 import { jest } from '@jest/globals';
 
-type AuthorAssociation = 'COLLABORATOR' | 'CONTRIBUTOR' | 'FIRST_TIMER' | 'FIRST_TIME_CONTRIBUTOR' | 'MANNEQUIN' | 'MEMBER' | 'NONE' | 'OWNER';
-
-interface GitHubErrorResponse {
-  response: {
-    status: number;
-    data: {
-      message: string;
-    };
-  };
-}
-
-interface GitHubNetworkError extends Error {
-  status: number;
-  message: string;
-}
-
-type GitHubRepository = RestEndpointMethodTypes['repos']['get']['response']['data'];
 type PullRequestRepository = NonNullable<RestEndpointMethodTypes['pulls']['get']['response']['data']['head']['repo']>;
 
-export const createMockGitHubUser = (overrides: Partial<RestEndpointMethodTypes['users']['getAuthenticated']['response']['data']> = {}): RestEndpointMethodTypes['users']['getAuthenticated']['response']['data'] => ({
+export const createMockGitHubUser = (overrides: Partial<MockGitHubUser> = {}): MockGitHubUser => ({
   login: 'test-user',
   id: 1,
   node_id: 'U_1',
@@ -70,7 +61,7 @@ export const createMockGitHubUser = (overrides: Partial<RestEndpointMethodTypes[
   ...overrides,
 });
 
-export const createMockGitHubRepository = (): GitHubRepository => ({
+export const createMockGitHubRepository = (): MockRepository => ({
   id: 123,
   node_id: 'R_1',
   name: 'test-repo',
@@ -177,65 +168,8 @@ export const createMockGitHubRepository = (): GitHubRepository => ({
 export const createMockPullRequestRepo = (): PullRequestRepository => {
   const baseRepo = createMockGitHubRepository();
   const prRepo: PullRequestRepository = {
-    id: baseRepo.id,
-    node_id: baseRepo.node_id,
-    name: baseRepo.name,
-    full_name: baseRepo.full_name,
-    private: baseRepo.private,
-    owner: baseRepo.owner,
-    html_url: baseRepo.html_url,
-    description: baseRepo.description,
-    fork: baseRepo.fork,
-    url: baseRepo.url,
-    archive_url: baseRepo.archive_url,
-    assignees_url: baseRepo.assignees_url,
-    blobs_url: baseRepo.blobs_url,
-    branches_url: baseRepo.branches_url,
-    collaborators_url: baseRepo.collaborators_url,
-    comments_url: baseRepo.comments_url,
-    commits_url: baseRepo.commits_url,
-    compare_url: baseRepo.compare_url,
-    contents_url: baseRepo.contents_url,
-    contributors_url: baseRepo.contributors_url,
-    deployments_url: baseRepo.deployments_url,
-    downloads_url: baseRepo.downloads_url,
-    events_url: baseRepo.events_url,
-    forks_url: baseRepo.forks_url,
-    git_commits_url: baseRepo.git_commits_url,
-    git_refs_url: baseRepo.git_refs_url,
-    git_tags_url: baseRepo.git_tags_url,
-    git_url: baseRepo.git_url,
-    hooks_url: baseRepo.hooks_url,
-    issue_comment_url: baseRepo.issue_comment_url,
-    issue_events_url: baseRepo.issue_events_url,
-    issues_url: baseRepo.issues_url,
-    keys_url: baseRepo.keys_url,
-    labels_url: baseRepo.labels_url,
-    languages_url: baseRepo.languages_url,
-    merges_url: baseRepo.merges_url,
-    milestones_url: baseRepo.milestones_url,
-    mirror_url: baseRepo.mirror_url,
-    notifications_url: baseRepo.notifications_url,
-    pulls_url: baseRepo.pulls_url,
-    releases_url: baseRepo.releases_url,
-    ssh_url: baseRepo.ssh_url,
-    stargazers_url: baseRepo.stargazers_url,
-    statuses_url: baseRepo.statuses_url,
-    subscribers_url: baseRepo.subscribers_url,
-    subscription_url: baseRepo.subscription_url,
-    svn_url: baseRepo.svn_url,
-    tags_url: baseRepo.tags_url,
-    teams_url: baseRepo.teams_url,
-    trees_url: baseRepo.trees_url,
-    clone_url: baseRepo.clone_url,
-    homepage: baseRepo.homepage,
-    language: baseRepo.language,
-    forks_count: baseRepo.forks_count,
-    stargazers_count: baseRepo.stargazers_count,
-    watchers_count: baseRepo.watchers_count,
-    size: baseRepo.size,
-    default_branch: baseRepo.default_branch,
-    open_issues_count: baseRepo.open_issues_count,
+    ...baseRepo,
+    temp_clone_token: '',
     has_issues: true,
     has_projects: true,
     has_wiki: true,
@@ -244,27 +178,17 @@ export const createMockPullRequestRepo = (): PullRequestRepository => {
     has_discussions: false,
     archived: false,
     disabled: false,
-    visibility: baseRepo.visibility,
-    pushed_at: baseRepo.pushed_at,
-    created_at: baseRepo.created_at,
-    updated_at: baseRepo.updated_at,
-    permissions: baseRepo.permissions,
-    allow_rebase_merge: true,
-    temp_clone_token: '',
-    allow_squash_merge: true,
-    allow_merge_commit: true,
     allow_forking: true,
     web_commit_signoff_required: false,
-    forks: baseRepo.forks,
-    open_issues: baseRepo.open_issues,
-    watchers: baseRepo.watchers,
-    license: baseRepo.license,
+    allow_merge_commit: true,
+    allow_squash_merge: true,
+    allow_rebase_merge: true,
   };
 
   return prRepo;
 };
 
-export const createMockGitHubPullRequest = (): RestEndpointMethodTypes['pulls']['get']['response']['data'] => {
+export const createMockGitHubPullRequest = (): MockPullRequest => {
   const bugLabel = {
     id: 1,
     node_id: 'L_1',
@@ -363,7 +287,7 @@ export const createMockGitHubPullRequest = (): RestEndpointMethodTypes['pulls'][
 export const createMockGitHubPullRequestReview = (
   state = 'APPROVED',
   body = 'Looks good to me!',
-  authorAssociation: AuthorAssociation = 'MEMBER',
+  authorAssociation: 'COLLABORATOR' | 'CONTRIBUTOR' | 'FIRST_TIMER' | 'FIRST_TIME_CONTRIBUTOR' | 'MANNEQUIN' | 'MEMBER' | 'NONE' | 'OWNER' = 'MEMBER',
   overrides: Partial<RestEndpointMethodTypes['pulls']['listReviews']['response']['data'][0]> = {}
 ): RestEndpointMethodTypes['pulls']['listReviews']['response']['data'][0] => ({
   id: 1,
@@ -446,60 +370,31 @@ export const setupSuccessfulMocks = (ctx: MockContext): void => {
 };
 
 export const setupNotFoundErrorMocks = (ctx: MockContext): void => {
-  const notFoundError: GitHubErrorResponse = {
-    response: {
-      status: 404,
-      data: { message: 'Not Found' },
-    },
-  };
-  ctx.octokit.rest.pulls.get.mockRejectedValue(notFoundError);
-  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(notFoundError);
-  ctx.octokit.rest.repos.get.mockRejectedValue(notFoundError);
+  ctx.octokit.rest.pulls.get.mockRejectedValue(mockNotFoundError);
+  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(mockNotFoundError);
+  ctx.octokit.rest.repos.get.mockRejectedValue(mockNotFoundError);
 };
 
 export const setupAuthenticationErrorMocks = (ctx: MockContext): void => {
-  const authError: GitHubErrorResponse = {
-    response: {
-      status: 401,
-      data: { message: 'Bad credentials' },
-    },
-  };
-  ctx.octokit.rest.pulls.get.mockRejectedValue(authError);
-  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(authError);
-  ctx.octokit.rest.repos.get.mockRejectedValue(authError);
+  ctx.octokit.rest.pulls.get.mockRejectedValue(mockAuthenticationError);
+  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(mockAuthenticationError);
+  ctx.octokit.rest.repos.get.mockRejectedValue(mockAuthenticationError);
 };
 
 export const setupRateLimitExceededMocks = (ctx: MockContext): void => {
-  const rateLimitError: GitHubErrorResponse = {
-    response: {
-      status: 403,
-      data: { message: 'API rate limit exceeded' },
-    },
-  };
-  ctx.octokit.rest.pulls.get.mockRejectedValue(rateLimitError);
-  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(rateLimitError);
-  ctx.octokit.rest.repos.get.mockRejectedValue(rateLimitError);
+  ctx.octokit.rest.pulls.get.mockRejectedValue(mockRateLimitExceededError);
+  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(mockRateLimitExceededError);
+  ctx.octokit.rest.repos.get.mockRejectedValue(mockRateLimitExceededError);
 };
 
 export const setupServerErrorMocks = (ctx: MockContext): void => {
-  const serverError: GitHubErrorResponse = {
-    response: {
-      status: 500,
-      data: { message: 'Internal Server Error' },
-    },
-  };
-  ctx.octokit.rest.pulls.get.mockRejectedValue(serverError);
-  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(serverError);
-  ctx.octokit.rest.repos.get.mockRejectedValue(serverError);
+  ctx.octokit.rest.pulls.get.mockRejectedValue(mockServerError);
+  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(mockServerError);
+  ctx.octokit.rest.repos.get.mockRejectedValue(mockServerError);
 };
 
 export const setupNetworkErrorMocks = (ctx: MockContext): void => {
-  const networkError: GitHubNetworkError = {
-    name: 'NetworkError',
-    message: 'Network Error',
-    status: 0,
-  };
-  ctx.octokit.rest.pulls.get.mockRejectedValue(networkError);
-  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(networkError);
-  ctx.octokit.rest.repos.get.mockRejectedValue(networkError);
+  ctx.octokit.rest.pulls.get.mockRejectedValue(mockNetworkError);
+  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(mockNetworkError);
+  ctx.octokit.rest.repos.get.mockRejectedValue(mockNetworkError);
 };
