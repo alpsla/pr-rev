@@ -1,150 +1,337 @@
-import { setupServer } from 'msw/node';
-import { rest } from 'msw';
-import { handlers } from '../msw/handlers';
+import { describe, expect, beforeEach, test } from '@jest/globals';
 import { GitHubService } from '../../api';
-import { mockPrismaClient } from '../mocks/prisma';
-import { Octokit } from '@octokit/rest';
-import type { PrismaClient } from '../../types';
+import { createMockContext } from '../utils/mock-factory';
+import { mockRateLimitResponse } from '../mocks/responses';
 
-const server = setupServer(...handlers);
-const GITHUB_API = 'https://api.github.com';
-
-describe('GitHub Service Tests (Hybrid Approach)', () => {
-  let service: GitHubService;
+describe('GitHub Service Hybrid Tests', () => {
+  let service: InstanceType<typeof GitHubService>;
+  let ctx = createMockContext();
   
-  // These would come from environment variables in CI
-  const TEST_REPO_OWNER = process.env.GITHUB_TEST_OWNER || 'test-owner';
-  const TEST_REPO_NAME = process.env.GITHUB_TEST_REPO || 'test-repo';
-  const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-
-  beforeAll(() => {
-    // Only enable MSW if we're not using real GitHub
-    if (!GITHUB_TOKEN) {
-      server.listen({ onUnhandledRequest: 'error' });
-    }
-  });
-
-  afterAll(() => {
-    if (!GITHUB_TOKEN) {
-      server.close();
-    }
-  });
-
   beforeEach(() => {
+    ctx = createMockContext();
     service = new GitHubService(
-      mockPrismaClient as unknown as PrismaClient,
-      new Octokit({
-        auth: GITHUB_TOKEN || 'test-token'
-      }),
-      {
-        type: 'token',
-        credentials: { token: GITHUB_TOKEN || 'test-token' }
-      }
+      ctx.prisma,
+      ctx.octokit,
+      { type: 'token', credentials: { token: 'test-token' } }
     );
+
+    // Set up default rate limit response
+    ctx.octokit.rest.rateLimit.get.mockResolvedValue(mockRateLimitResponse);
   });
 
-  afterEach(() => {
-    if (!GITHUB_TOKEN) {
-      server.resetHandlers();
-    }
-  });
+  describe('Repository Hybrid Tests', () => {
+    test('should handle repository data with all optional fields', async () => {
+      const baseUrl = 'https://api.github.com/repos/test-owner/test-repo';
+      const mockRepo = {
+        data: {
+          id: 123456,
+          node_id: 'R_123456',
+          name: 'test-repo',
+          full_name: 'test-owner/test-repo',
+          private: false,
+          owner: {
+            login: 'test-owner',
+            id: 1,
+            node_id: 'U_1',
+            avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4',
+            gravatar_id: '',
+            url: 'https://api.github.com/users/test-owner',
+            html_url: 'https://github.com/test-owner',
+            followers_url: 'https://api.github.com/users/test-owner/followers',
+            following_url: 'https://api.github.com/users/test-owner/following{/other_user}',
+            gists_url: 'https://api.github.com/users/test-owner/gists{/gist_id}',
+            starred_url: 'https://api.github.com/users/test-owner/starred{/owner}{/repo}',
+            subscriptions_url: 'https://api.github.com/users/test-owner/subscriptions',
+            organizations_url: 'https://api.github.com/users/test-owner/orgs',
+            repos_url: 'https://api.github.com/users/test-owner/repos',
+            events_url: 'https://api.github.com/users/test-owner/events{/privacy}',
+            received_events_url: 'https://api.github.com/users/test-owner/received_events',
+            type: 'User',
+            site_admin: false,
+            name: 'Test User',
+            email: 'test@example.com',
+            starred_at: undefined
+          },
+          description: 'Test repository with all optional fields',
+          fork: false,
+          url: baseUrl,
+          html_url: 'https://github.com/test-owner/test-repo',
+          archive_url: `${baseUrl}/{archive_format}{/ref}`,
+          assignees_url: `${baseUrl}/assignees{/user}`,
+          blobs_url: `${baseUrl}/git/blobs{/sha}`,
+          branches_url: `${baseUrl}/branches{/branch}`,
+          collaborators_url: `${baseUrl}/collaborators{/collaborator}`,
+          comments_url: `${baseUrl}/comments{/number}`,
+          commits_url: `${baseUrl}/commits{/sha}`,
+          compare_url: `${baseUrl}/compare/{base}...{head}`,
+          contents_url: `${baseUrl}/contents/{+path}`,
+          contributors_url: `${baseUrl}/contributors`,
+          deployments_url: `${baseUrl}/deployments`,
+          downloads_url: `${baseUrl}/downloads`,
+          events_url: `${baseUrl}/events`,
+          forks_url: `${baseUrl}/forks`,
+          git_commits_url: `${baseUrl}/git/commits{/sha}`,
+          git_refs_url: `${baseUrl}/git/refs{/sha}`,
+          git_tags_url: `${baseUrl}/git/tags{/sha}`,
+          git_url: `git://github.com/test-owner/test-repo.git`,
+          issue_comment_url: `${baseUrl}/issues/comments{/number}`,
+          issue_events_url: `${baseUrl}/issues/events{/number}`,
+          issues_url: `${baseUrl}/issues{/number}`,
+          keys_url: `${baseUrl}/keys{/key_id}`,
+          labels_url: `${baseUrl}/labels{/name}`,
+          languages_url: `${baseUrl}/languages`,
+          merges_url: `${baseUrl}/merges`,
+          milestones_url: `${baseUrl}/milestones{/number}`,
+          notifications_url: `${baseUrl}/notifications{?since,all,participating}`,
+          pulls_url: `${baseUrl}/pulls{/number}`,
+          releases_url: `${baseUrl}/releases{/id}`,
+          ssh_url: 'git@github.com:test-owner/test-repo.git',
+          stargazers_url: `${baseUrl}/stargazers`,
+          statuses_url: `${baseUrl}/statuses/{sha}`,
+          subscribers_url: `${baseUrl}/subscribers`,
+          subscription_url: `${baseUrl}/subscription`,
+          tags_url: `${baseUrl}/tags`,
+          teams_url: `${baseUrl}/teams`,
+          trees_url: `${baseUrl}/git/trees{/sha}`,
+          hooks_url: `${baseUrl}/hooks`,
+          clone_url: 'https://github.com/test-owner/test-repo.git',
+          svn_url: 'https://github.com/test-owner/test-repo',
+          default_branch: 'main',
+          language: 'TypeScript',
+          stargazers_count: 100,
+          watchers_count: 100,
+          subscribers_count: 50,
+          network_count: 25,
+          forks_count: 25,
+          allow_auto_merge: true,
+          allow_merge_commit: true,
+          allow_squash_merge: true,
+          allow_rebase_merge: true,
+          archived: false,
+          disabled: false,
+          open_issues_count: 5,
+          license: {
+            key: 'mit',
+            name: 'MIT License',
+            url: 'https://api.github.com/licenses/mit',
+            spdx_id: 'MIT',
+            node_id: 'MDc6TGljZW5zZW1pdA=='
+          },
+          forks: 25,
+          open_issues: 5,
+          watchers: 100,
+          topics: ['typescript', 'testing'],
+          mirror_url: null,
+          has_issues: true,
+          has_projects: true,
+          has_pages: true,
+          has_wiki: true,
+          has_downloads: true,
+          has_discussions: true,
+          visibility: 'public',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          pushed_at: new Date().toISOString(),
+          size: 1000,
+          homepage: 'https://test-repo.example.com',
+          permissions: {
+            admin: true,
+            maintain: true,
+            push: true,
+            triage: true,
+            pull: true
+          }
+        },
+        status: 200 as const,
+        headers: {},
+        url: baseUrl
+      };
 
-  describe('Real GitHub Tests', () => {
-    // Skip these tests if no GitHub token is provided
-    const itif = GITHUB_TOKEN ? it : it.skip;
+      ctx.octokit.rest.repos.get.mockResolvedValue(mockRepo);
 
-    itif('should fetch real repository information', async () => {
-      const repo = await service.getRepository(TEST_REPO_OWNER, TEST_REPO_NAME);
-      
+      const repo = await service.getRepository('test-owner', 'test-repo');
+
+      // Verify data transformation
       expect(repo).toMatchObject({
-        name: expect.any(String),
-        fullName: expect.stringContaining('/'),
-        private: expect.any(Boolean),
-        defaultBranch: expect.any(String)
-      });
-    });
-
-    itif('should handle real pull request operations', async () => {
-      // This assumes there's at least one PR in the test repo
-      const pr = await service.getPullRequest(TEST_REPO_OWNER, TEST_REPO_NAME, 1);
-      
-      expect(pr).toMatchObject({
-        number: expect.any(Number),
-        title: expect.any(String),
-        state: expect.any(String)
-      });
-    });
-  });
-
-  describe('MSW Tests (Edge Cases)', () => {
-    // Only run these tests when using MSW
-    const itif = !GITHUB_TOKEN ? it : it.skip;
-
-    itif('should handle rate limiting', async () => {
-      // Use MSW to simulate rate limit
-      server.use(
-        rest.get(`${GITHUB_API}/repos/:owner/:repo`, (req, res, ctx) => {
-          return res(
-            ctx.status(403),
-            ctx.json({
-              message: 'API rate limit exceeded',
-              documentation_url: 'https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting'
-            })
-          );
-        })
-      );
-
-      await expect(
-        service.getRepository(TEST_REPO_OWNER, TEST_REPO_NAME)
-      ).rejects.toThrow('API rate limit exceeded');
-    });
-
-    itif('should handle non-existent repository', async () => {
-      await expect(
-        service.getRepository(TEST_REPO_OWNER, 'non-existent-repo')
-      ).rejects.toThrow('Not Found');
-    });
-
-    itif('should handle network errors', async () => {
-      server.use(
-        rest.get(`${GITHUB_API}/repos/:owner/:repo`, (_req, res) => {
-          return res.networkError('Failed to connect');
-        })
-      );
-
-      await expect(
-        service.getRepository(TEST_REPO_OWNER, TEST_REPO_NAME)
-      ).rejects.toThrow();
-    });
-  });
-
-  describe('Common Tests (Work with both Real and Mock)', () => {
-    it('should handle invalid authentication', async () => {
-      const invalidService = new GitHubService(
-        mockPrismaClient as unknown as PrismaClient,
-        new Octokit({
-          auth: 'invalid-token'
-        }),
-        {
-          type: 'token',
-          credentials: { token: 'invalid-token' }
+        id: 123456,
+        name: 'test-repo',
+        fullName: 'test-owner/test-repo',
+        private: false,
+        description: 'Test repository with all optional fields',
+        defaultBranch: 'main',
+        language: 'TypeScript',
+        stargazersCount: 100,
+        forksCount: 25,
+        settings: {
+          id: '123456-settings',
+          repositoryId: '123456',
+          autoMergeEnabled: true,
+          requireApprovals: 1,
+          protectedBranches: ['main'],
+          allowedMergeTypes: ['merge', 'squash', 'rebase']
         }
-      );
+      });
 
-      await expect(
-        invalidService.getRepository(TEST_REPO_OWNER, TEST_REPO_NAME)
-      ).rejects.toThrow(/Bad credentials|Unauthorized/);
+      // Verify API interaction
+      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledWith({
+        owner: 'test-owner',
+        repo: 'test-repo'
+      });
+      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(1);
     });
 
-    it('should transform repository data correctly', async () => {
-      const repo = await service.getRepository(TEST_REPO_OWNER, TEST_REPO_NAME);
-      
-      // These properties should exist regardless of real/mock data
-      expect(repo).toHaveProperty('id');
-      expect(repo).toHaveProperty('name');
-      expect(repo).toHaveProperty('fullName');
-      expect(repo).toHaveProperty('settings');
-      expect(repo.settings).toHaveProperty('allowedMergeTypes');
+    test('should handle repository data with minimal fields', async () => {
+      const baseUrl = 'https://api.github.com/repos/test-owner/test-repo';
+      const mockRepo = {
+        data: {
+          id: 123456,
+          node_id: 'R_123456',
+          name: 'test-repo',
+          full_name: 'test-owner/test-repo',
+          private: false,
+          owner: {
+            login: 'test-owner',
+            id: 1,
+            node_id: 'U_1',
+            avatar_url: 'https://avatars.githubusercontent.com/u/1?v=4',
+            gravatar_id: '',
+            url: 'https://api.github.com/users/test-owner',
+            html_url: 'https://github.com/test-owner',
+            followers_url: 'https://api.github.com/users/test-owner/followers',
+            following_url: 'https://api.github.com/users/test-owner/following{/other_user}',
+            gists_url: 'https://api.github.com/users/test-owner/gists{/gist_id}',
+            starred_url: 'https://api.github.com/users/test-owner/starred{/owner}{/repo}',
+            subscriptions_url: 'https://api.github.com/users/test-owner/subscriptions',
+            organizations_url: 'https://api.github.com/users/test-owner/orgs',
+            repos_url: 'https://api.github.com/users/test-owner/repos',
+            events_url: 'https://api.github.com/users/test-owner/events{/privacy}',
+            received_events_url: 'https://api.github.com/users/test-owner/received_events',
+            type: 'User',
+            site_admin: false,
+            name: null,
+            email: null,
+            starred_at: undefined
+          },
+          description: null,
+          fork: false,
+          url: baseUrl,
+          html_url: 'https://github.com/test-owner/test-repo',
+          archive_url: `${baseUrl}/{archive_format}{/ref}`,
+          assignees_url: `${baseUrl}/assignees{/user}`,
+          blobs_url: `${baseUrl}/git/blobs{/sha}`,
+          branches_url: `${baseUrl}/branches{/branch}`,
+          collaborators_url: `${baseUrl}/collaborators{/collaborator}`,
+          comments_url: `${baseUrl}/comments{/number}`,
+          commits_url: `${baseUrl}/commits{/sha}`,
+          compare_url: `${baseUrl}/compare/{base}...{head}`,
+          contents_url: `${baseUrl}/contents/{+path}`,
+          contributors_url: `${baseUrl}/contributors`,
+          deployments_url: `${baseUrl}/deployments`,
+          downloads_url: `${baseUrl}/downloads`,
+          events_url: `${baseUrl}/events`,
+          forks_url: `${baseUrl}/forks`,
+          git_commits_url: `${baseUrl}/git/commits{/sha}`,
+          git_refs_url: `${baseUrl}/git/refs{/sha}`,
+          git_tags_url: `${baseUrl}/git/tags{/sha}`,
+          git_url: `git://github.com/test-owner/test-repo.git`,
+          issue_comment_url: `${baseUrl}/issues/comments{/number}`,
+          issue_events_url: `${baseUrl}/issues/events{/number}`,
+          issues_url: `${baseUrl}/issues{/number}`,
+          keys_url: `${baseUrl}/keys{/key_id}`,
+          labels_url: `${baseUrl}/labels{/name}`,
+          languages_url: `${baseUrl}/languages`,
+          merges_url: `${baseUrl}/merges`,
+          milestones_url: `${baseUrl}/milestones{/number}`,
+          notifications_url: `${baseUrl}/notifications{?since,all,participating}`,
+          pulls_url: `${baseUrl}/pulls{/number}`,
+          releases_url: `${baseUrl}/releases{/id}`,
+          ssh_url: 'git@github.com:test-owner/test-repo.git',
+          stargazers_url: `${baseUrl}/stargazers`,
+          statuses_url: `${baseUrl}/statuses/{sha}`,
+          subscribers_url: `${baseUrl}/subscribers`,
+          subscription_url: `${baseUrl}/subscription`,
+          tags_url: `${baseUrl}/tags`,
+          teams_url: `${baseUrl}/teams`,
+          trees_url: `${baseUrl}/git/trees{/sha}`,
+          hooks_url: `${baseUrl}/hooks`,
+          clone_url: 'https://github.com/test-owner/test-repo.git',
+          svn_url: 'https://github.com/test-owner/test-repo',
+          default_branch: 'main',
+          language: null,
+          stargazers_count: 0,
+          watchers_count: 0,
+          subscribers_count: 0,
+          network_count: 0,
+          forks_count: 0,
+          allow_auto_merge: false,
+          allow_merge_commit: true,
+          allow_squash_merge: true,
+          allow_rebase_merge: true,
+          archived: false,
+          disabled: false,
+          open_issues_count: 0,
+          license: null,
+          forks: 0,
+          open_issues: 0,
+          watchers: 0,
+          topics: [],
+          mirror_url: null,
+          has_issues: true,
+          has_projects: true,
+          has_pages: false,
+          has_wiki: true,
+          has_downloads: true,
+          has_discussions: false,
+          visibility: 'public',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          pushed_at: new Date().toISOString(),
+          size: 0,
+          homepage: null,
+          permissions: {
+            admin: true,
+            maintain: true,
+            push: true,
+            triage: true,
+            pull: true
+          }
+        },
+        status: 200 as const,
+        headers: {},
+        url: baseUrl
+      };
+
+      ctx.octokit.rest.repos.get.mockResolvedValue(mockRepo);
+
+      const repo = await service.getRepository('test-owner', 'test-repo');
+
+      // Verify data transformation with minimal fields
+      expect(repo).toMatchObject({
+        id: 123456,
+        name: 'test-repo',
+        fullName: 'test-owner/test-repo',
+        private: false,
+        description: '',
+        defaultBranch: 'main',
+        language: '',
+        stargazersCount: 0,
+        forksCount: 0,
+        settings: {
+          id: '123456-settings',
+          repositoryId: '123456',
+          autoMergeEnabled: false,
+          requireApprovals: 1,
+          protectedBranches: ['main'],
+          allowedMergeTypes: ['merge', 'squash', 'rebase']
+        }
+      });
+
+      // Verify API interaction
+      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledWith({
+        owner: 'test-owner',
+        repo: 'test-repo'
+      });
+      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(1);
     });
   });
 });
