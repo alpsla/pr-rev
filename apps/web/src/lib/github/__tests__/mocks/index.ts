@@ -3,6 +3,13 @@ import { createGraphQLMock } from './graphql';
 import { createPullRequestResponse } from './pullRequest';
 import type { PullRequestParams, PullRequestResponse } from './pullRequest';
 import type { PullRequestWebhookPayload, ReviewWebhookPayload } from '../../types';
+import {
+  mockRateLimitResponse,
+  mockGithubRepoResponse,
+  mockPullRequestResponse,
+  mockPullRequestReviewsResponse
+} from './responses';
+import { createMockOctokit, type MockOctokit } from './octokit';
 
 // Create mock webhook payloads
 export function createPullRequestWebhookPayload(params: {
@@ -70,6 +77,12 @@ export {
   createRequestMock,
   createGraphQLMock,
   createPullRequestResponse,
+  createMockOctokit,
+  mockRateLimitResponse,
+  mockGithubRepoResponse,
+  mockPullRequestResponse,
+  mockPullRequestReviewsResponse,
   type PullRequestParams,
-  type PullRequestResponse
+  type PullRequestResponse,
+  type MockOctokit
 };

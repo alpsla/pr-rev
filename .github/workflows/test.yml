@@ -1,0 +1,57 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    env:
+      GITHUB_TOKEN: ${{ secrets.TEST_GITHUB_TOKEN }}
+      GITHUB_TEST_OWNER: ${{ secrets.TEST_OWNER }}
+      GITHUB_TEST_REPO: ${{ secrets.TEST_REPO }}
+      DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+      NODE_ENV: test
+      # Add this for local testing
+      CI: true
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.10.0'
+      
+      # Simplified pnpm setup for local testing
+      - name: Install pnpm
+        run: |
+          if ! command -v pnpm &> /dev/null; then
+            npm install -g pnpm@8.9.0
+          fi
+          
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+        
+      - name: Run type check
+        run: pnpm type-check
+        
+      - name: Run tests
+        run: pnpm test
+        
+      # Only run coverage upload in CI, not locally
+      - name: Upload coverage
+        if: ${{ !env.ACT }}
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
