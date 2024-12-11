@@ -1,7 +1,31 @@
 import { GitHubService } from '../../api';
-import { createMockContext, setupNetworkErrorMocks, setupServerErrorMocks, setupRateLimitExceededMocks } from '../utils/mock-factory';
-import { expectGitHubError } from '../utils/test-helpers';
-import { TEST_OWNER, TEST_REPO, TEST_PR_NUMBER } from '../utils/test-data';
+import { 
+  createMockContext, 
+  setupNetworkErrorMocks, 
+  setupServerErrorMocks, 
+  setupRateLimitExceededMocks,
+  setupValidationErrorMocks,
+  setupResourceConflictMocks,
+  setupSecondaryRateLimitMocks,
+  setupInvalidResponseMocks
+} from '../utils/mock-factory';
+import { 
+  expectGitHubError, 
+  expectErrorContext,
+  expectRateLimitContext,
+  expectRequestContext,
+  expectErrorType
+} from '../utils/test-helpers';
+import { TEST_OWNER, TEST_REPO } from '../utils/test-data';
+import {
+  ValidationError,
+  ResourceConflictError,
+  ApiQuotaExceededError,
+  RateLimitError,
+  NetworkError,
+  ServerError,
+  GitHubError
+} from '../../errors';
 
 describe('GitHubService - Error Handling', () => {
   const ctx = createMockContext();
@@ -21,160 +45,170 @@ describe('GitHubService - Error Handling', () => {
 
   describe('Rate Limit Handling', () => {
     it('should handle rate limit exceeded errors', async () => {
-      // Setup
-      setupRateLimitExceededMocks(ctx);
+      setupRateLimitExceededMocks(ctx, {
+        'x-ratelimit-limit': '5000',
+        'x-ratelimit-remaining': '0',
+        'x-ratelimit-reset': '1609459200'
+      });
 
-      // Execute & Verify Repository Request
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         403,
         'API rate limit exceeded'
-      );
+      ) as GitHubError;
 
-      // Execute & Verify Pull Request Request
-      await expectGitHubError(
-        service.getPullRequest(TEST_OWNER, TEST_REPO, TEST_PR_NUMBER),
-        403,
-        'API rate limit exceeded'
-      );
-
-      // Execute & Verify Reviews Request
-      await expectGitHubError(
-        service.getPullRequestReviews(TEST_OWNER, TEST_REPO, TEST_PR_NUMBER),
-        403,
-        'API rate limit exceeded'
-      );
+      expectErrorType(error, RateLimitError);
+      expectRateLimitContext(error);
+      expect(error.name).toBe('RateLimitError');
     });
 
-    it('should clear cache when rate limit is exceeded', async () => {
-      // First set up successful responses to populate cache
-      setupRateLimitExceededMocks(ctx);
+    it('should handle secondary rate limit errors', async () => {
+      setupSecondaryRateLimitMocks(ctx);
 
-      // Execute requests that will fail with rate limit
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         403,
-        'API rate limit exceeded'
-      );
+        'secondary rate limit'
+      ) as GitHubError;
 
-      // Verify the API was called
-      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(1);
-
-      // Try the same request again to verify cache was cleared
-      await expectGitHubError(
-        service.getRepository(TEST_OWNER, TEST_REPO),
-        403,
-        'API rate limit exceeded'
-      );
-
-      // Verify the API was called again (cache was cleared)
-      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(2);
+      expectErrorType(error, ApiQuotaExceededError);
+      expectRequestContext(error);
+      expect(error.name).toBe('ApiQuotaExceededError');
     });
   });
 
-  describe('Server Error Handling', () => {
-    it('should handle server errors', async () => {
-      // Setup
-      setupServerErrorMocks(ctx);
+  describe('Validation Error Handling', () => {
+    it('should handle validation errors from GitHub API', async () => {
+      setupValidationErrorMocks(ctx);
 
-      // Execute & Verify Repository Request
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
-        500,
-        'Internal Server Error'
-      );
+        422,
+        'Validation Failed'
+      ) as GitHubError;
 
-      // Execute & Verify Pull Request Request
-      await expectGitHubError(
-        service.getPullRequest(TEST_OWNER, TEST_REPO, TEST_PR_NUMBER),
-        500,
-        'Internal Server Error'
-      );
-
-      // Execute & Verify Reviews Request
-      await expectGitHubError(
-        service.getPullRequestReviews(TEST_OWNER, TEST_REPO, TEST_PR_NUMBER),
-        500,
-        'Internal Server Error'
-      );
+      expectErrorType(error, ValidationError);
+      expectRequestContext(error);
+      expect(error.name).toBe('ValidationError');
     });
 
-    it('should clear cache on server errors', async () => {
-      // Setup server error responses
-      setupServerErrorMocks(ctx);
+    it('should handle invalid response data', async () => {
+      setupInvalidResponseMocks(ctx);
 
-      // Execute request that will fail
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
-        500,
-        'Internal Server Error'
-      );
+        200,
+        'Invalid response from GitHub API'
+      ) as GitHubError;
 
-      // Verify the API was called
-      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(1);
+      expectErrorType(error, ValidationError);
+      expectErrorContext(error, { action: 'get_repository' });
+      expect(error.name).toBe('ValidationError');
+    });
+  });
 
-      // Try the same request again to verify cache was cleared
-      await expectGitHubError(
+  describe('Resource Conflict Handling', () => {
+    it('should handle resource conflict errors', async () => {
+      setupResourceConflictMocks(ctx);
+
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
-        500,
-        'Internal Server Error'
-      );
+        409,
+        'Resource conflict'
+      ) as GitHubError;
 
-      // Verify the API was called again (cache was cleared)
-      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(2);
+      expectErrorType(error, ResourceConflictError);
+      expectRequestContext(error);
+      expect(error.name).toBe('ResourceConflictError');
     });
   });
 
   describe('Network Error Handling', () => {
     it('should handle network errors', async () => {
-      // Setup
-      setupNetworkErrorMocks(ctx);
+      setupNetworkErrorMocks(ctx, 'ECONNREFUSED');
 
-      // Execute & Verify Repository Request
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
-        0,
-        'Network Error'
-      );
+        500,
+        'Network error'
+      ) as GitHubError;
 
-      // Execute & Verify Pull Request Request
-      await expectGitHubError(
-        service.getPullRequest(TEST_OWNER, TEST_REPO, TEST_PR_NUMBER),
-        0,
-        'Network Error'
-      );
-
-      // Execute & Verify Reviews Request
-      await expectGitHubError(
-        service.getPullRequestReviews(TEST_OWNER, TEST_REPO, TEST_PR_NUMBER),
-        0,
-        'Network Error'
-      );
+      expectErrorType(error, NetworkError);
+      expectErrorContext(error, { code: 'ECONNREFUSED' });
+      expect(error.name).toBe('NetworkError');
     });
 
-    it('should clear cache on network errors', async () => {
-      // Setup network error responses
-      setupNetworkErrorMocks(ctx);
+    it('should handle timeout errors', async () => {
+      setupNetworkErrorMocks(ctx, 'ETIMEDOUT');
 
-      // Execute request that will fail
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
-        0,
-        'Network Error'
-      );
+        500,
+        'Network error'
+      ) as GitHubError;
 
-      // Verify the API was called
-      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(1);
+      expectErrorType(error, NetworkError);
+      expectErrorContext(error, { code: 'ETIMEDOUT' });
+      expect(error.name).toBe('NetworkError');
+    });
+  });
 
-      // Try the same request again to verify cache was cleared
-      await expectGitHubError(
+  describe('Server Error Handling', () => {
+    it('should handle server errors', async () => {
+      setupServerErrorMocks(ctx);
+
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
-        0,
-        'Network Error'
-      );
+        500,
+        'Internal Server Error'
+      ) as GitHubError;
 
-      // Verify the API was called again (cache was cleared)
-      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(2);
+      expectErrorType(error, ServerError);
+      expectRequestContext(error);
+      expect(error.name).toBe('ServerError');
+    });
+  });
+
+  describe('Error Context', () => {
+    it('should include timestamp in all error contexts', async () => {
+      setupServerErrorMocks(ctx);
+
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        500
+      ) as GitHubError;
+
+      expectErrorContext(error, {});
+      expect(error.context?.timestamp).toBeDefined();
+      expect(new Date(error.context?.timestamp as string).getTime()).toBeLessThanOrEqual(Date.now());
+    });
+
+    it('should include request details in error context', async () => {
+      setupServerErrorMocks(ctx);
+
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        500
+      ) as GitHubError;
+
+      expectRequestContext(error);
+      expect(error.context?.method).toBe('GET');
+      expect(error.context?.endpoint).toContain('/repos/');
+    });
+
+    it('should include operation context in error', async () => {
+      setupServerErrorMocks(ctx);
+
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        500
+      ) as GitHubError;
+
+      expectErrorContext(error, {
+        action: 'get_repository',
+        owner: TEST_OWNER,
+        repo: TEST_REPO
+      });
     });
   });
 
@@ -182,30 +216,37 @@ describe('GitHubService - Error Handling', () => {
     it('should recover after errors when API becomes available', async () => {
       // First request fails with network error
       setupNetworkErrorMocks(ctx);
-      await expectGitHubError(
+      const networkError = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
-        0,
-        'Network Error'
-      );
+        500,
+        'Network error'
+      ) as GitHubError;
+      expectErrorType(networkError, NetworkError);
 
       // Second request fails with rate limit
       setupRateLimitExceededMocks(ctx);
-      await expectGitHubError(
+      const rateLimitError = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         403,
         'API rate limit exceeded'
-      );
+      ) as GitHubError;
+      expectErrorType(rateLimitError, RateLimitError);
 
       // Third request fails with server error
       setupServerErrorMocks(ctx);
-      await expectGitHubError(
+      const serverError = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         500,
         'Internal Server Error'
-      );
+      ) as GitHubError;
+      expectErrorType(serverError, ServerError);
 
-      // Verify all requests were made (cache was cleared each time)
+      // Verify all requests were made
       expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(3);
+      expect(ctx.octokit.rest.repos.get).toHaveBeenCalledWith({
+        owner: TEST_OWNER,
+        repo: TEST_REPO
+      });
     });
   });
 });

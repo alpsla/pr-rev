@@ -1,8 +1,20 @@
 import { GitHubService } from '../../api';
 import { createMockContext } from '../utils/mock-factory';
-import { GitHubError, ServerError } from '../../errors';
+import { 
+  GitHubError, 
+  ServerError, 
+  ValidationError, 
+  RateLimitError, 
+  AuthenticationError 
+} from '../../errors';
 import { TEST_OWNER, TEST_REPO } from '../utils/test-data';
 import { createMockRepositoryResponse } from '../utils/mock-responses';
+import { 
+  expectGitHubError,
+  expectErrorType, 
+  expectErrorContext,
+  expectRequestContext 
+} from '../utils/test-helpers';
 
 describe('GitHubService - Error Utilities', () => {
   const ctx = createMockContext();
@@ -29,17 +41,15 @@ describe('GitHubService - Error Utilities', () => {
         }
       });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (error instanceof GitHubError) {
-          expect(error.status).toBe(404);
-          expect(error.message).toBe('Not Found');
-        } else {
-          fail('Expected GitHubError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        404,
+        'Not Found'
+      ) as GitHubError;
+
+      expectErrorType(error, GitHubError);
+      expectErrorContext(error, { status: 404 });
+      expect(error.name).toBe('GitHubError');
     });
 
     it('should classify 500+ errors as ServerError', async () => {
@@ -50,34 +60,32 @@ describe('GitHubService - Error Utilities', () => {
         }
       });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (error instanceof ServerError) {
-          expect(error.message).toBe('Internal Server Error');
-        } else {
-          fail('Expected ServerError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        500,
+        'Internal Server Error'
+      ) as GitHubError;
+
+      expectErrorType(error, ServerError);
+      expectRequestContext(error);
+      expect(error.name).toBe('ServerError');
     });
 
     it('should classify network errors as GitHubError', async () => {
-      ctx.octokit.rest.repos.get.mockRejectedValueOnce(
-        new Error('Network Error')
-      );
+      ctx.octokit.rest.repos.get.mockRejectedValueOnce({
+        code: 'ECONNREFUSED',
+        message: 'Network Error'
+      });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (error instanceof GitHubError) {
-          expect(error.message).toBe('Network Error');
-          expect(error.status).toBe(500);
-        } else {
-          fail('Expected GitHubError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        500,
+        'Network Error'
+      ) as GitHubError;
+
+      expectErrorType(error, GitHubError);
+      expectErrorContext(error, { code: 'ECONNREFUSED' });
+      expect(error.status).toBe(500);
     });
   });
 
@@ -98,17 +106,19 @@ describe('GitHubService - Error Utilities', () => {
         }
       });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (error instanceof GitHubError) {
-          expect(error.status).toBe(422);
-          expect(error.data).toEqual(errorData);
-        } else {
-          fail('Expected GitHubError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        422,
+        'Validation Failed'
+      ) as GitHubError;
+
+      expectErrorType(error, ValidationError);
+      expectErrorContext(error, {
+        action: 'get_repository',
+        owner: TEST_OWNER,
+        repo: TEST_REPO
+      });
+      expect(error.data).toEqual(errorData);
     });
 
     it('should handle errors without response data', async () => {
@@ -118,17 +128,15 @@ describe('GitHubService - Error Utilities', () => {
         }
       });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (error instanceof ServerError) {
-          expect(error.message).toBe('Internal Server Error');
-          expect(error.data).toBeUndefined();
-        } else {
-          fail('Expected ServerError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        500,
+        'Internal Server Error'
+      ) as GitHubError;
+
+      expectErrorType(error, ServerError);
+      expectRequestContext(error);
+      expect(error.data).toBeUndefined();
     });
   });
 
@@ -146,16 +154,16 @@ describe('GitHubService - Error Utilities', () => {
         }
       });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (error instanceof GitHubError) {
-          expect(error.message).toBe('Validation Failed');
-        } else {
-          fail('Expected GitHubError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        422,
+        'Validation Failed'
+      ) as GitHubError;
+
+      expectErrorType(error, ValidationError);
+      expectRequestContext(error);
+      expect(error.name).toBe('ValidationError');
+      expect(error.message).toContain('Validation Failed');
     });
 
     it('should handle rate limit error messages', async () => {
@@ -165,21 +173,25 @@ describe('GitHubService - Error Utilities', () => {
           data: {
             message: 'API rate limit exceeded',
             documentation_url: 'https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting'
+          },
+          headers: {
+            'x-ratelimit-limit': '5000',
+            'x-ratelimit-remaining': '0',
+            'x-ratelimit-reset': '1609459200'
           }
         }
       });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (error instanceof GitHubError) {
-          expect(error.message).toBe('API rate limit exceeded');
-          expect(error.status).toBe(403);
-        } else {
-          fail('Expected GitHubError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        403,
+        'API rate limit exceeded'
+      ) as GitHubError;
+
+      expectErrorType(error, RateLimitError);
+      expectRequestContext(error);
+      expect(error.name).toBe('RateLimitError');
+      expect(error.message).toContain('API rate limit exceeded');
     });
 
     it('should handle authentication error messages', async () => {
@@ -193,17 +205,16 @@ describe('GitHubService - Error Utilities', () => {
         }
       });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (error instanceof GitHubError) {
-          expect(error.message).toBe('Bad credentials');
-          expect(error.status).toBe(401);
-        } else {
-          fail('Expected GitHubError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        401,
+        'Bad credentials'
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
+      expectRequestContext(error);
+      expect(error.name).toBe('AuthenticationError');
+      expect(error.message).toContain('Bad credentials');
     });
   });
 
@@ -217,14 +228,13 @@ describe('GitHubService - Error Utilities', () => {
         }
       });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (!(error instanceof ServerError)) {
-          fail('Expected ServerError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        500,
+        'Internal Server Error'
+      ) as GitHubError;
+
+      expectErrorType(error, ServerError);
 
       // Second request succeeds
       ctx.octokit.rest.repos.get.mockResolvedValueOnce({
@@ -258,14 +268,13 @@ describe('GitHubService - Error Utilities', () => {
         }
       });
 
-      try {
-        await service.getRepository(TEST_OWNER, TEST_REPO);
-        fail('Expected error to be thrown');
-      } catch (error) {
-        if (!(error instanceof ServerError)) {
-          fail('Expected ServerError to be thrown');
-        }
-      }
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        500,
+        'Internal Server Error'
+      ) as GitHubError;
+
+      expectErrorType(error, ServerError);
 
       // Third request should hit API again (cache was cleared)
       ctx.octokit.rest.repos.get.mockResolvedValueOnce({

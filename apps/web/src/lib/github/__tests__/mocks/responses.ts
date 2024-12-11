@@ -1,59 +1,188 @@
 import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-methods';
-import { 
-  RateLimitError, 
-  NotFoundError, 
-  AuthenticationError, 
-  NetworkError, 
-  ServerError 
-} from '../../errors';
 
 type RateLimitGetResponse = RestEndpointMethodTypes['rateLimit']['get']['response'];
 type ReposGetResponse = RestEndpointMethodTypes['repos']['get']['response'];
 type PullsGetResponse = RestEndpointMethodTypes['pulls']['get']['response'];
 type PullsListReviewsResponse = RestEndpointMethodTypes['pulls']['listReviews']['response'];
 
-// Mock error responses
+// Raw GitHub API error responses
 export const mockRateLimitExceededError = {
   status: 403,
+  message: 'API rate limit exceeded',
   response: {
     status: 403,
     data: {
-      message: new RateLimitError().message
+      message: 'API rate limit exceeded',
+      documentation_url: 'https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting'
+    },
+    headers: {
+      'x-ratelimit-limit': '5000',
+      'x-ratelimit-remaining': '0',
+      'x-ratelimit-reset': '1609459200'
+    }
+  },
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/owner/repo',
+    headers: {
+      accept: 'application/vnd.github.v3+json'
+    }
+  }
+};
+
+export const mockSecondaryRateLimitError = {
+  status: 403,
+  message: 'You have exceeded a secondary rate limit',
+  response: {
+    status: 403,
+    data: {
+      message: 'You have exceeded a secondary rate limit. Please wait a few minutes before you try again.',
+      documentation_url: 'https://docs.github.com/rest/overview/resources-in-the-rest-api#secondary-rate-limits'
+    },
+    headers: {}
+  },
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/owner/repo',
+    headers: {
+      accept: 'application/vnd.github.v3+json'
+    }
+  }
+};
+
+export const mockValidationError = {
+  status: 422,
+  message: 'Validation Failed',
+  response: {
+    status: 422,
+    data: {
+      message: 'Validation Failed',
+      errors: [
+        {
+          resource: 'PullRequest',
+          code: 'custom',
+          message: 'Invalid pull request data'
+        }
+      ],
+      documentation_url: 'https://docs.github.com/rest/reference/pulls#create-a-pull-request'
+    },
+    headers: {}
+  },
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/owner/repo',
+    headers: {
+      accept: 'application/vnd.github.v3+json'
+    }
+  }
+};
+
+export const mockResourceConflictError = {
+  status: 409,
+  message: 'Resource conflict',
+  response: {
+    status: 409,
+    data: {
+      message: 'Resource conflict',
+      documentation_url: 'https://docs.github.com/rest'
+    },
+    headers: {}
+  },
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/owner/repo',
+    headers: {
+      accept: 'application/vnd.github.v3+json'
+    }
+  }
+};
+
+export const mockInvalidResponseError = {
+  status: 200,
+  message: 'Invalid response from GitHub API',
+  response: {
+    status: 200,
+    data: null,
+    headers: {}
+  },
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/owner/repo',
+    headers: {
+      accept: 'application/vnd.github.v3+json'
     }
   }
 };
 
 export const mockNotFoundError = {
   status: 404,
+  message: 'Not Found',
   response: {
     status: 404,
     data: {
-      message: new NotFoundError().message
+      message: 'Not Found',
+      documentation_url: 'https://docs.github.com/rest'
+    },
+    headers: {}
+  },
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/owner/repo',
+    headers: {
+      accept: 'application/vnd.github.v3+json'
     }
   }
 };
 
 export const mockAuthenticationError = {
   status: 401,
+  message: 'Bad credentials',
   response: {
     status: 401,
     data: {
-      message: new AuthenticationError().message
+      message: 'Bad credentials',
+      documentation_url: 'https://docs.github.com/rest'
+    },
+    headers: {}
+  },
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/owner/repo',
+    headers: {
+      accept: 'application/vnd.github.v3+json'
     }
   }
 };
 
 export const mockNetworkError = {
-  message: new NetworkError().message,
-  status: 500
+  name: 'NetworkError',
+  message: 'Network error',
+  code: 'ECONNREFUSED',
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/owner/repo',
+    headers: {
+      accept: 'application/vnd.github.v3+json'
+    }
+  }
 };
 
 export const mockServerError = {
   status: 500,
+  message: 'Internal Server Error',
   response: {
     status: 500,
     data: {
-      message: new ServerError().message
+      message: 'Internal Server Error',
+      documentation_url: 'https://docs.github.com/rest'
+    },
+    headers: {}
+  },
+  request: {
+    method: 'GET',
+    url: 'https://api.github.com/repos/owner/repo',
+    headers: {
+      accept: 'application/vnd.github.v3+json'
     }
   }
 };
@@ -110,7 +239,8 @@ const mockRepo = {
   git_commits_url: 'https://api.github.com/repos/test-owner/test-repo/git/commits{/sha}',
   git_refs_url: 'https://api.github.com/repos/test-owner/test-repo/git/refs{/sha}',
   git_tags_url: 'https://api.github.com/repos/test-owner/test-repo/git/tags{/sha}',
-  git_url: 'git://github.com/test-owner/test-repo.git',
+  git_url: 'git://github.com/owner/test-repo.git',
+  hooks_url: 'https://api.github.com/repos/test-owner/test-repo/hooks',
   issue_comment_url: 'https://api.github.com/repos/test-owner/test-repo/issues/comments{/number}',
   issue_events_url: 'https://api.github.com/repos/test-owner/test-repo/issues/events{/number}',
   issues_url: 'https://api.github.com/repos/test-owner/test-repo/issues{/number}',
@@ -132,7 +262,6 @@ const mockRepo = {
   trees_url: 'https://api.github.com/repos/test-owner/test-repo/git/trees{/sha}',
   clone_url: 'https://github.com/test-owner/test-repo.git',
   mirror_url: null,
-  hooks_url: 'https://api.github.com/repos/test-owner/test-repo/hooks',
   svn_url: 'https://github.com/test-owner/test-repo',
   homepage: null,
   language: 'TypeScript',

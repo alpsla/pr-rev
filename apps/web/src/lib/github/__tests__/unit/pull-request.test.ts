@@ -1,9 +1,10 @@
 import { jest } from '@jest/globals';
 import { GitHubService } from '../../api';
 import { createMockContext, setupSuccessfulMocks, setupNotFoundErrorMocks, setupAuthenticationErrorMocks } from '../utils/mock-factory';
-import { expectPullRequestData, expectGitHubError } from '../utils/test-helpers';
+import { expectPullRequestData, expectGitHubError, expectErrorType, expectRequestContext } from '../utils/test-helpers';
 import { TEST_OWNER, TEST_REPO, TEST_PR_NUMBER } from '../utils/test-data';
 import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-methods';
+import { GitHubError, AuthenticationError } from '../../errors';
 
 type PullsListReviewsResponse = RestEndpointMethodTypes['pulls']['listReviews']['response'];
 
@@ -37,7 +38,7 @@ describe('GitHubService - Pull Request Operations', () => {
         title: ctx.responses.pullRequest.data.title,
         state: ctx.responses.pullRequest.data.state,
         mergeable: ctx.responses.pullRequest.data.mergeable,
-        labels: ctx.responses.pullRequest.data.labels
+        labels: ctx.responses.pullRequest.data.labels.map(label => label.name)
       });
 
       // Verify API call
@@ -69,11 +70,15 @@ describe('GitHubService - Pull Request Operations', () => {
       setupNotFoundErrorMocks(ctx);
 
       // Execute & Verify
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getPullRequest(TEST_OWNER, TEST_REPO, 999),
         404,
         'Not Found'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, GitHubError);
+      expectRequestContext(error);
+      expect(error.name).toBe('GitHubError');
     });
 
     it('should handle authentication errors', async () => {
@@ -81,11 +86,15 @@ describe('GitHubService - Pull Request Operations', () => {
       setupAuthenticationErrorMocks(ctx);
 
       // Execute & Verify
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getPullRequest(TEST_OWNER, TEST_REPO, TEST_PR_NUMBER),
         401,
         'Bad credentials'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
+      expectRequestContext(error);
+      expect(error.name).toBe('AuthenticationError');
     });
 
     it('should clear cache on error', async () => {
@@ -97,11 +106,14 @@ describe('GitHubService - Pull Request Operations', () => {
 
       // Second request fails
       setupAuthenticationErrorMocks(ctx);
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getPullRequest(TEST_OWNER, TEST_REPO, TEST_PR_NUMBER),
         401,
         'Bad credentials'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
+      expectRequestContext(error);
 
       // Third request should hit the API again
       setupSuccessfulMocks(ctx);
@@ -121,14 +133,15 @@ describe('GitHubService - Pull Request Operations', () => {
 
       // Verify
       expect(result).toHaveLength(1);
-      const review = ctx.responses.pullRequestReview.data;
+      const review = ctx.responses.pullRequestReview.data[0];
       expect(result[0]).toMatchObject({
         id: review.id,
         state: review.state,
         body: review.body,
         user: review.user && {
           login: review.user.login,
-          type: review.user.type
+          type: review.user.type,
+          role: 'REVIEWER'
         }
       });
 
@@ -165,11 +178,15 @@ describe('GitHubService - Pull Request Operations', () => {
       setupNotFoundErrorMocks(ctx);
 
       // Execute & Verify
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getPullRequestReviews(TEST_OWNER, TEST_REPO, 999),
         404,
         'Not Found'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, GitHubError);
+      expectRequestContext(error);
+      expect(error.name).toBe('GitHubError');
     });
   });
 });
