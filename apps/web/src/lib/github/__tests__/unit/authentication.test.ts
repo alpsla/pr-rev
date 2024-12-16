@@ -1,8 +1,9 @@
 import { GitHubService } from '../../api';
 import { createMockContext, setupAuthenticationErrorMocks } from '../utils/mock-factory';
-import { expectGitHubError } from '../utils/test-helpers';
+import { expectGitHubError, expectErrorType, expectRequestContext } from '../utils/test-helpers';
 import { TEST_OWNER, TEST_REPO } from '../utils/test-data';
 import { createMockRepositoryResponse } from '../utils/mock-responses';
+import { AuthenticationError, GitHubError } from '../../errors';
 
 describe('GitHubService - Authentication', () => {
   const ctx = createMockContext();
@@ -38,11 +39,15 @@ describe('GitHubService - Authentication', () => {
     it('should handle invalid token', async () => {
       setupAuthenticationErrorMocks(ctx);
 
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         401,
         'Bad credentials'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
+      expectRequestContext(error);
+      expect(error.name).toBe('AuthenticationError');
     });
 
     it('should handle expired token', async () => {
@@ -53,11 +58,15 @@ describe('GitHubService - Authentication', () => {
         }
       });
 
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         401,
         'Token expired'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
+      expectRequestContext(error);
+      expect(error.name).toBe('AuthenticationError');
     });
 
     it('should handle token with insufficient permissions', async () => {
@@ -68,11 +77,15 @@ describe('GitHubService - Authentication', () => {
         }
       });
 
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         403,
         'Resource not accessible by integration'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
+      expectRequestContext(error);
+      expect(error.name).toBe('AuthenticationError');
     });
   });
 
@@ -115,11 +128,14 @@ describe('GitHubService - Authentication', () => {
       // Second request fails with auth error
       setupAuthenticationErrorMocks(ctx);
 
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         401,
         'Bad credentials'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
+      expectRequestContext(error);
     });
   });
 
@@ -138,11 +154,13 @@ describe('GitHubService - Authentication', () => {
       // Second request fails with auth error
       setupAuthenticationErrorMocks(ctx);
 
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         401,
         'Bad credentials'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
 
       // Third request should try API again (not use cache)
       ctx.octokit.rest.repos.get.mockResolvedValueOnce({
@@ -160,11 +178,13 @@ describe('GitHubService - Authentication', () => {
       // Initial request fails
       setupAuthenticationErrorMocks(ctx);
 
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service.getRepository(TEST_OWNER, TEST_REPO),
         401,
         'Bad credentials'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
 
       // Create new service with refreshed token
       service = new GitHubService(
@@ -209,11 +229,13 @@ describe('GitHubService - Authentication', () => {
       // Second service fails
       setupAuthenticationErrorMocks(ctx);
 
-      await expectGitHubError(
+      const error = await expectGitHubError(
         service2.getRepository(TEST_OWNER, TEST_REPO),
         401,
         'Bad credentials'
-      );
+      ) as GitHubError;
+
+      expectErrorType(error, AuthenticationError);
 
       // First service should still work
       ctx.octokit.rest.repos.get.mockResolvedValueOnce({

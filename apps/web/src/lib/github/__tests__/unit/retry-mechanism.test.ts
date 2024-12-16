@@ -2,6 +2,8 @@ import { GitHubService } from '../../api';
 import { createMockContext } from '../utils/mock-factory';
 import { TEST_OWNER, TEST_REPO } from '../utils/test-data';
 import { createMockRepositoryResponse, createMockPullRequestResponse } from '../utils/mock-responses';
+import { expectGitHubError, expectErrorType } from '../utils/test-helpers';
+import { RateLimitError, NetworkError, ServerError, GitHubError } from '../../errors';
 
 describe('GitHubService - Retry Mechanism', () => {
   const ctx = createMockContext();
@@ -27,7 +29,12 @@ describe('GitHubService - Retry Mechanism', () => {
       const rateLimitError = {
         response: {
           status: 403,
-          data: { message: 'API rate limit exceeded' }
+          data: { message: 'API rate limit exceeded' },
+          headers: {
+            'x-ratelimit-limit': '5000',
+            'x-ratelimit-remaining': '0',
+            'x-ratelimit-reset': '1609459200'
+          }
         }
       };
 
@@ -43,7 +50,13 @@ describe('GitHubService - Retry Mechanism', () => {
       jest.advanceTimersByTime(2000); // Second retry
       jest.advanceTimersByTime(4000); // Third retry
 
-      await expect(promise).rejects.toThrow('API rate limit exceeded');
+      const error = await expectGitHubError(
+        promise,
+        403,
+        'API rate limit exceeded'
+      ) as GitHubError;
+
+      expectErrorType(error, RateLimitError);
       expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(3);
     });
 
@@ -52,7 +65,12 @@ describe('GitHubService - Retry Mechanism', () => {
       ctx.octokit.rest.repos.get.mockRejectedValueOnce({
         response: {
           status: 403,
-          data: { message: 'API rate limit exceeded' }
+          data: { message: 'API rate limit exceeded' },
+          headers: {
+            'x-ratelimit-limit': '5000',
+            'x-ratelimit-remaining': '0',
+            'x-ratelimit-reset': '1609459200'
+          }
         }
       });
 
@@ -77,7 +95,11 @@ describe('GitHubService - Retry Mechanism', () => {
   describe('Network Error Retries', () => {
     it('should retry on network errors', async () => {
       // First three attempts fail with network error
-      const networkError = new Error('Network Error');
+      const networkError = {
+        code: 'ECONNREFUSED',
+        message: 'Network Error'
+      };
+
       ctx.octokit.rest.repos.get
         .mockRejectedValueOnce(networkError)
         .mockRejectedValueOnce(networkError)
@@ -90,15 +112,22 @@ describe('GitHubService - Retry Mechanism', () => {
       jest.advanceTimersByTime(2000); // Second retry
       jest.advanceTimersByTime(4000); // Third retry
 
-      await expect(promise).rejects.toThrow('Network Error');
+      const error = await expectGitHubError(
+        promise,
+        500,
+        'Network Error'
+      ) as GitHubError;
+
+      expectErrorType(error, NetworkError);
       expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(3);
     });
 
     it('should succeed after network error retry', async () => {
       // First attempt fails with network error
-      ctx.octokit.rest.repos.get.mockRejectedValueOnce(
-        new Error('Network Error')
-      );
+      ctx.octokit.rest.repos.get.mockRejectedValueOnce({
+        code: 'ECONNREFUSED',
+        message: 'Network Error'
+      });
 
       // Second attempt succeeds
       ctx.octokit.rest.repos.get.mockResolvedValueOnce({
@@ -140,7 +169,13 @@ describe('GitHubService - Retry Mechanism', () => {
       jest.advanceTimersByTime(2000); // Second retry
       jest.advanceTimersByTime(4000); // Third retry
 
-      await expect(promise).rejects.toThrow('Internal Server Error');
+      const error = await expectGitHubError(
+        promise,
+        500,
+        'Internal Server Error'
+      ) as GitHubError;
+
+      expectErrorType(error, ServerError);
       expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(3);
     });
 
@@ -180,8 +215,13 @@ describe('GitHubService - Retry Mechanism', () => {
         }
       });
 
-      await expect(service.getRepository(TEST_OWNER, TEST_REPO))
-        .rejects.toThrow('Not Found');
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        404,
+        'Not Found'
+      ) as GitHubError;
+
+      expect(error.name).toBe('GitHubError');
       expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(1);
     });
 
@@ -196,8 +236,13 @@ describe('GitHubService - Retry Mechanism', () => {
         }
       });
 
-      await expect(service.getRepository(TEST_OWNER, TEST_REPO))
-        .rejects.toThrow('Validation Failed');
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        422,
+        'Validation Failed'
+      ) as GitHubError;
+
+      expect(error.name).toBe('ValidationError');
       expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(1);
     });
 
@@ -209,8 +254,13 @@ describe('GitHubService - Retry Mechanism', () => {
         }
       });
 
-      await expect(service.getRepository(TEST_OWNER, TEST_REPO))
-        .rejects.toThrow('Bad credentials');
+      const error = await expectGitHubError(
+        service.getRepository(TEST_OWNER, TEST_REPO),
+        401,
+        'Bad credentials'
+      ) as GitHubError;
+
+      expect(error.name).toBe('AuthenticationError');
       expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(1);
     });
   });
@@ -247,7 +297,13 @@ describe('GitHubService - Retry Mechanism', () => {
       jest.advanceTimersByTime(2000); // Second retry
       jest.advanceTimersByTime(4000); // Third retry
 
-      await expect(promise).rejects.toThrow('Internal Server Error');
+      const error = await expectGitHubError(
+        promise,
+        500,
+        'Internal Server Error'
+      ) as GitHubError;
+
+      expectErrorType(error, ServerError);
       expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(4); // 1 success + 3 retries
     });
 
@@ -282,7 +338,13 @@ describe('GitHubService - Retry Mechanism', () => {
       jest.advanceTimersByTime(2000); // Second retry
       jest.advanceTimersByTime(4000); // Third retry
 
-      await expect(repoPromise).rejects.toThrow('Internal Server Error');
+      const error = await expectGitHubError(
+        repoPromise,
+        500,
+        'Internal Server Error'
+      ) as GitHubError;
+
+      expectErrorType(error, ServerError);
       const prResult = await prPromise;
 
       expect(ctx.octokit.rest.repos.get).toHaveBeenCalledTimes(3);
