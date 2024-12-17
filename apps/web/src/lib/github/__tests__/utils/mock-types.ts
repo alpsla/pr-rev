@@ -1,189 +1,257 @@
-import type { RestEndpointMethodTypes } from '@octokit/rest';
+import { ReviewStatus } from '@prisma/client';
 
-export type MockGitHubUser = RestEndpointMethodTypes['users']['getAuthenticated']['response']['data'];
-export type MockRepository = RestEndpointMethodTypes['repos']['get']['response']['data'];
-export type MockPullRequest = RestEndpointMethodTypes['pulls']['get']['response']['data'];
-
-export type WebhookEventName = 'pull_request' | 'pull_request_review' | 'repository';
-
-export interface BaseWebhookPayload {
-  action: string;
-  repository: {
-    id: string;
-    name: string;
-    full_name: string;
-    private?: boolean;
-    html_url?: string;
-    owner: MockGitHubUser;
-  };
+// Extended type for API responses that require more fields than webhook payloads
+export interface GitHubAPIUser {
+  login: string;
+  id: number;
+  node_id: string;
+  avatar_url: string;
+  gravatar_id: string;
+  url: string;
+  html_url: string;
+  followers_url: string;
+  following_url: string;
+  gists_url: string;
+  starred_url: string;
+  subscriptions_url: string;
+  organizations_url: string;
+  repos_url: string;
+  events_url: string;
+  received_events_url: string;
+  type: string;
+  site_admin: boolean;
 }
 
-export interface PullRequestWebhookPayload extends BaseWebhookPayload {
-  pull_request: {
+export interface MockRepository {
+  id: number;
+  node_id: string;
+  name: string;
+  full_name: string;
+  owner: GitHubAPIUser;
+  private: boolean;
+  html_url: string;
+  description: string;
+  fork: boolean;
+  url: string;
+  archive_url: string;
+  assignees_url: string;
+  blobs_url: string;
+  branches_url: string;
+  collaborators_url: string;
+  comments_url: string;
+  commits_url: string;
+  compare_url: string;
+  contents_url: string;
+  contributors_url: string;
+  deployments_url: string;
+  downloads_url: string;
+  events_url: string;
+  forks_url: string;
+  git_commits_url: string;
+  git_refs_url: string;
+  git_tags_url: string;
+  git_url: string;
+  hooks_url: string;
+  issue_comment_url: string;
+  issue_events_url: string;
+  issues_url: string;
+  keys_url: string;
+  labels_url: string;
+  languages_url: string;
+  merges_url: string;
+  milestones_url: string;
+  mirror_url: null | string;
+  notifications_url: string;
+  pulls_url: string;
+  releases_url: string;
+  ssh_url: string;
+  stargazers_url: string;
+  statuses_url: string;
+  subscribers_url: string;
+  subscription_url: string;
+  svn_url: string;
+  tags_url: string;
+  teams_url: string;
+  trees_url: string;
+  clone_url: string;
+  homepage: null | string;
+  language: string | null;
+  forks_count: number;
+  stargazers_count: number;
+  watchers_count: number;
+  size: number;
+  default_branch: string;
+  open_issues_count: number;
+  is_template: boolean;
+  topics: string[];
+  has_issues: boolean;
+  has_projects: boolean;
+  has_wiki: boolean;
+  has_pages: boolean;
+  has_downloads: boolean;
+  has_discussions: boolean;
+  archived: boolean;
+  disabled: boolean;
+  visibility: string;
+  pushed_at: string;
+  created_at: string;
+  updated_at: string;
+  permissions: {
+    admin: boolean;
+    maintain: boolean;
+    push: boolean;
+    triage: boolean;
+    pull: boolean;
+  };
+  allow_rebase_merge: boolean;
+  template_repository: null | MockRepository;
+  temp_clone_token: string;
+  allow_squash_merge: boolean;
+  allow_auto_merge: boolean;
+  delete_branch_on_merge: boolean;
+  allow_merge_commit: boolean;
+  subscribers_count: number;
+  network_count: number;
+  license: null | {
+    key: string;
+    name: string;
+    spdx_id: string;
+    url: string;
+    node_id: string;
+  };
+  forks: number;
+  open_issues: number;
+  watchers: number;
+  allow_forking: boolean;
+  web_commit_signoff_required: boolean;
+  security_and_analysis: null | Record<string, unknown>;
+}
+
+export interface MockPullRequest {
+  url: string;
+  id: number;
+  node_id: string;
+  html_url: string;
+  diff_url: string;
+  patch_url: string;
+  issue_url: string;
+  commits_url: string;
+  review_comments_url: string;
+  review_comment_url: string;
+  comments_url: string;
+  statuses_url: string;
+  number: number;
+  state: 'open' | 'closed';
+  locked: boolean;
+  title: string;
+  user: GitHubAPIUser;
+  body: string | null;
+  labels: Array<{ id: number; name: string; description?: string; color?: string }>;
+  milestone: null | {
+    id: number;
     number: number;
     title: string;
-    state: string;
-    user: MockGitHubUser;
-    head: {
-      ref: string;
-      sha: string;
-    };
-    base: {
-      ref: string;
-    };
-    draft: boolean;
-    merged?: boolean;
-    merged_at?: string;
+    description: string;
+    state: 'open' | 'closed';
+    due_on: string | null;
   };
+  active_lock_reason: null | string;
+  created_at: string;
+  updated_at: string;
+  closed_at: null | string;
+  merged_at: null | string;
+  merge_commit_sha: null | string;
+  assignee: null | GitHubAPIUser;
+  assignees: GitHubAPIUser[];
+  requested_reviewers: GitHubAPIUser[];
+  requested_teams: Array<{
+    id: number;
+    name: string;
+    slug: string;
+    description: string | null;
+    privacy: string;
+    permission: string;
+  }>;
+  head: {
+    label: string;
+    ref: string;
+    sha: string;
+    user: GitHubAPIUser;
+    repo: MockRepository;
+  };
+  base: {
+    label: string;
+    ref: string;
+    sha: string;
+    user: GitHubAPIUser;
+    repo: MockRepository;
+  };
+  _links: {
+    self: { href: string };
+    html: { href: string };
+    issue: { href: string };
+    comments: { href: string };
+    review_comments: { href: string };
+    review_comment: { href: string };
+    commits: { href: string };
+    statuses: { href: string };
+  };
+  author_association: string;
+  auto_merge: null | {
+    enabled_by: GitHubAPIUser;
+    merge_method: 'merge' | 'squash' | 'rebase';
+    commit_title: string;
+    commit_message: string;
+  };
+  draft: boolean;
+  merged: boolean;
+  mergeable: boolean | null;
+  rebaseable: boolean | null;
+  mergeable_state: string;
+  merged_by: null | GitHubAPIUser;
+  comments: number;
+  review_comments: number;
+  maintainer_can_modify: boolean;
+  commits: number;
+  additions: number;
+  deletions: number;
+  changed_files: number;
 }
 
-export interface PullRequestReviewWebhookPayload extends BaseWebhookPayload {
+// Export ReviewStatus for use in tests
+export { ReviewStatus };
+
+
+export const createMockPrismaClient = () => ({
+  $connect: jest.fn().mockResolvedValue(undefined),
+  $disconnect: jest.fn().mockResolvedValue(undefined),
+  $transaction: jest.fn(),
+  $use: jest.fn(),
+  $executeRaw: jest.fn(),
+  $executeRawUnsafe: jest.fn(),
+  $queryRaw: jest.fn(),
+  platform: {
+    findFirstOrThrow: jest.fn().mockResolvedValue({
+      id: 'platform-1',
+      type: 'GITHUB',
+      name: 'GitHub',
+      enabled: true,
+    }),
+  },
+  repository: {
+    create: jest.fn().mockResolvedValue({}),
+    update: jest.fn().mockResolvedValue({}),
+    delete: jest.fn().mockResolvedValue({}),
+    upsert: jest.fn().mockResolvedValue({}),
+  },
+  pullRequest: {
+    create: jest.fn().mockResolvedValue({}),
+    update: jest.fn().mockResolvedValue({}),
+    upsert: jest.fn().mockResolvedValue({}),
+  },
   review: {
-    id: string;
-    user: MockGitHubUser;
-    body: string;
-    state: string;
-    submitted_at: string;
-  };
-  pull_request: {
-    id: string;
-    number: number;
-    user: MockGitHubUser;
-  };
-}
-
-export interface RepositoryWebhookPayload extends BaseWebhookPayload {
-  // No additional fields needed for repository events
-}
-
-export type WebhookEventPayload = 
-  | PullRequestWebhookPayload 
-  | PullRequestReviewWebhookPayload 
-  | RepositoryWebhookPayload;
-
-export const isPullRequestPayload = (payload: WebhookEventPayload): payload is PullRequestWebhookPayload => {
-  return 'pull_request' in payload && !('review' in payload);
-};
-
-export const isPullRequestReviewPayload = (payload: WebhookEventPayload): payload is PullRequestReviewWebhookPayload => {
-  return 'review' in payload && 'pull_request' in payload;
-};
-
-export const isRepositoryPayload = (payload: WebhookEventPayload): payload is RepositoryWebhookPayload => {
-  return !('pull_request' in payload) && !('review' in payload);
-};
-
-export const createBasicRepository = (): MockRepository => ({
-  id: 123,
-  node_id: 'R_1',
-  name: 'test-repo',
-  full_name: 'owner/test-repo',
-  private: false,
-  owner: {
-    login: 'test-user',
-    id: 1,
-    node_id: 'U_1',
-    avatar_url: 'https://github.com/test-user.png',
-    gravatar_id: '',
-    url: 'https://api.github.com/users/test-user',
-    html_url: 'https://github.com/test-user',
-    followers_url: 'https://api.github.com/users/test-user/followers',
-    following_url: 'https://api.github.com/users/test-user/following{/other_user}',
-    gists_url: 'https://api.github.com/users/test-user/gists{/gist_id}',
-    starred_url: 'https://api.github.com/users/test-user/starred{/owner}{/repo}',
-    subscriptions_url: 'https://api.github.com/users/test-user/subscriptions',
-    organizations_url: 'https://api.github.com/users/test-user/orgs',
-    repos_url: 'https://api.github.com/users/test-user/repos',
-    events_url: 'https://api.github.com/users/test-user/events{/privacy}',
-    received_events_url: 'https://api.github.com/users/test-user/received_events',
-    type: 'User',
-    site_admin: false,
+    create: jest.fn().mockResolvedValue({}),
+    update: jest.fn().mockResolvedValue({}),
+    updateMany: jest.fn().mockResolvedValue({}),
   },
-  html_url: 'https://github.com/owner/test-repo',
-  description: 'Test repository',
-  fork: false,
-  url: 'https://api.github.com/repos/owner/test-repo',
-  archive_url: 'https://api.github.com/repos/owner/test-repo/{archive_format}{/ref}',
-  assignees_url: 'https://api.github.com/repos/owner/test-repo/assignees{/user}',
-  blobs_url: 'https://api.github.com/repos/owner/test-repo/git/blobs{/sha}',
-  branches_url: 'https://api.github.com/repos/owner/test-repo/branches{/branch}',
-  collaborators_url: 'https://api.github.com/repos/owner/test-repo/collaborators{/collaborator}',
-  comments_url: 'https://api.github.com/repos/owner/test-repo/comments{/number}',
-  commits_url: 'https://api.github.com/repos/owner/test-repo/commits{/sha}',
-  compare_url: 'https://api.github.com/repos/owner/test-repo/compare/{base}...{head}',
-  contents_url: 'https://api.github.com/repos/owner/test-repo/contents/{+path}',
-  contributors_url: 'https://api.github.com/repos/owner/test-repo/contributors',
-  deployments_url: 'https://api.github.com/repos/owner/test-repo/deployments',
-  downloads_url: 'https://api.github.com/repos/owner/test-repo/downloads',
-  events_url: 'https://api.github.com/repos/owner/test-repo/events',
-  forks_url: 'https://api.github.com/repos/owner/test-repo/forks',
-  git_commits_url: 'https://api.github.com/repos/owner/test-repo/git/commits{/sha}',
-  git_refs_url: 'https://api.github.com/repos/owner/test-repo/git/refs{/sha}',
-  git_tags_url: 'https://api.github.com/repos/owner/test-repo/git/tags{/sha}',
-  git_url: 'git://github.com/owner/test-repo.git',
-  hooks_url: 'https://api.github.com/repos/owner/test-repo/hooks',
-  issue_comment_url: 'https://api.github.com/repos/owner/test-repo/issues/comments{/number}',
-  issue_events_url: 'https://api.github.com/repos/owner/test-repo/issues/events{/number}',
-  issues_url: 'https://api.github.com/repos/owner/test-repo/issues{/number}',
-  keys_url: 'https://api.github.com/repos/owner/test-repo/keys{/key_id}',
-  labels_url: 'https://api.github.com/repos/owner/test-repo/labels{/name}',
-  languages_url: 'https://api.github.com/repos/owner/test-repo/languages',
-  merges_url: 'https://api.github.com/repos/owner/test-repo/merges',
-  milestones_url: 'https://api.github.com/repos/owner/test-repo/milestones{/number}',
-  mirror_url: null,
-  notifications_url: 'https://api.github.com/repos/owner/test-repo/notifications{?since,all,participating}',
-  pulls_url: 'https://api.github.com/repos/owner/test-repo/pulls{/number}',
-  releases_url: 'https://api.github.com/repos/owner/test-repo/releases{/id}',
-  ssh_url: 'git@github.com:owner/test-repo.git',
-  stargazers_url: 'https://api.github.com/repos/owner/test-repo/stargazers',
-  statuses_url: 'https://api.github.com/repos/owner/test-repo/statuses/{sha}',
-  subscribers_url: 'https://api.github.com/repos/owner/test-repo/subscribers',
-  subscription_url: 'https://api.github.com/repos/owner/test-repo/subscription',
-  svn_url: 'https://github.com/owner/test-repo',
-  tags_url: 'https://api.github.com/repos/owner/test-repo/tags',
-  teams_url: 'https://api.github.com/repos/owner/test-repo/teams',
-  trees_url: 'https://api.github.com/repos/owner/test-repo/git/trees{/sha}',
-  clone_url: 'https://github.com/owner/test-repo.git',
-  homepage: null,
-  language: null,
-  forks_count: 0,
-  stargazers_count: 0,
-  watchers_count: 0,
-  size: 0,
-  default_branch: 'main',
-  open_issues_count: 0,
-  is_template: false,
-  topics: [],
-  has_issues: true,
-  has_projects: true,
-  has_wiki: true,
-  has_pages: false,
-  has_downloads: true,
-  has_discussions: false,
-  archived: false,
-  disabled: false,
-  visibility: 'public',
-  pushed_at: '2024-01-01T00:00:00Z',
-  created_at: '2024-01-01T00:00:00Z',
-  updated_at: '2024-01-01T00:00:00Z',
-  permissions: {
-    admin: false,
-    maintain: false,
-    push: false,
-    triage: false,
-    pull: true,
-  },
-  allow_rebase_merge: true,
-  allow_squash_merge: true,
-  allow_merge_commit: true,
-  subscribers_count: 0,
-  network_count: 0,
-  license: null,
-  forks: 0,
-  open_issues: 0,
-  watchers: 0,
-  allow_forking: true,
-  web_commit_signoff_required: false,
-  security_and_analysis: {},
-  custom_properties: {},
 });

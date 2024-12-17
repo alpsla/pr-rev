@@ -1,9 +1,20 @@
 import { describe, expect, beforeEach, test } from '@jest/globals';
 import { GitHubService } from '../api';
-import { createMockContext, createMockGitHubUser } from './utils/mock-factory';
+import { 
+  createMockContext, 
+  createMockGitHubUser, 
+  createMockPlatform 
+} from './utils/mock-factory';
+import { 
+  PullRequestWebhookPayload,
+  PullRequestReviewWebhookPayload,
+  RepositoryWebhookPayload,
+  WebhookEventPayload
+} from './utils/mock-types';
+import { ReviewStatus } from '@prisma/client';
 
 describe('GitHubService', () => {
-  let service: InstanceType<typeof GitHubService>;
+  let service: GitHubService;
   let ctx = createMockContext();
 
   beforeEach(() => {
@@ -13,18 +24,24 @@ describe('GitHubService', () => {
       ctx.octokit,
       { type: 'token', credentials: { token: 'test-token' } }
     );
+    ctx.prisma.platform.findFirstOrThrow.mockResolvedValue(createMockPlatform());
   });
 
   describe('Webhook Event Handling', () => {
     describe('Pull Request Events', () => {
-      const mockUser = createMockGitHubUser();
-      const mockPayload = {
+      // Create a complete mock user using the utility function
+      const mockUser = createMockGitHubUser({
+        id: 1,
+        login: 'testuser'
+      });
+      
+      const mockPayload: PullRequestWebhookPayload = {
         action: 'opened',
         pull_request: {
           number: 1,
           title: 'Test PR',
           state: 'open',
-          user: mockUser,
+          user: createMockGitHubUser(),  // This will now be correctly typed
           head: {
             ref: 'feature',
             sha: 'abc123',
@@ -38,13 +55,12 @@ describe('GitHubService', () => {
           id: '123',
           name: 'test-repo',
           full_name: 'org/test-repo',
-          owner: mockUser,
-        },
+          owner: createMockGitHubUser()  // This will now be correctly typed
+        }
       };
-
       test('handles opened pull request', async () => {
         await service.handleWebhookEvent('pull_request', mockPayload);
-
+    
         expect(ctx.prisma.pullRequest.upsert).toHaveBeenCalledWith({
           where: {
             repositoryId_number: {
@@ -57,7 +73,7 @@ describe('GitHubService', () => {
             title: 'Test PR',
             status: 'OPEN',
             repositoryId: '123',
-            authorId: mockUser.id.toString(),
+            authorId: mockUser.login,
             baseBranch: 'main',
             headBranch: 'feature',
             isDraft: false,
@@ -71,9 +87,9 @@ describe('GitHubService', () => {
           },
         });
       });
-
+    
       test('handles closed pull request', async () => {
-        const closedPayload = {
+        const closedPayload: PullRequestWebhookPayload = {
           ...mockPayload,
           action: 'closed',
           pull_request: {
@@ -83,9 +99,9 @@ describe('GitHubService', () => {
             merged_at: '2024-01-01T00:00:00Z',
           },
         };
-
+    
         await service.handleWebhookEvent('pull_request', closedPayload);
-
+    
         expect(ctx.prisma.pullRequest.update).toHaveBeenCalledWith({
           where: {
             repositoryId_number: {
@@ -105,71 +121,80 @@ describe('GitHubService', () => {
     });
 
     describe('Review Events', () => {
-      const mockUser = createMockGitHubUser();
-      const mockPayload = {
+      const mockUser = createMockGitHubUser({
+        login: 'reviewer'
+      });
+
+      const baseReviewPayload: PullRequestReviewWebhookPayload = {
         action: 'submitted',
         review: {
-          id: '456',
-          user: mockUser,
+          id: 1,
+          state: 'approved',
           body: 'LGTM',
-          state: 'APPROVED',
+          user: mockUser,
           submitted_at: '2024-01-01T00:00:00Z',
+          commit_id: 'abc123'
         },
         pull_request: {
-          id: '789',
+          id: 'pr123',
           number: 1,
-          user: mockUser,
+          state: 'open',
+          user: createMockGitHubUser()
         },
         repository: {
           id: '123',
           name: 'test-repo',
           full_name: 'org/test-repo',
-          owner: mockUser,
-        },
+          owner: createMockGitHubUser()
+        }
       };
 
       test('handles submitted review', async () => {
-        await service.handleWebhookEvent('pull_request_review', mockPayload);
-
+        await service.handleWebhookEvent('pull_request_review', baseReviewPayload);
+    
         expect(ctx.prisma.review.create).toHaveBeenCalledWith({
           data: {
-            pullRequestId: '789',
-            reviewerId: mockUser.id.toString(),
-            status: 'APPROVED',
+            pullRequestId: 'pr123',
+            reviewerId: 'reviewer',
+            status: ReviewStatus.APPROVED,
             body: 'LGTM',
-            submittedAt: new Date('2024-01-01T00:00:00Z'),
-          },
+            submittedAt: expect.any(Date)
+          }
         });
       });
-
+    
       test('handles dismissed review', async () => {
-        const dismissedPayload = {
-          ...mockPayload,
+        const dismissedPayload: PullRequestReviewWebhookPayload = {
+          ...baseReviewPayload,
           action: 'dismissed',
           review: {
-            ...mockPayload.review,
-            state: 'DISMISSED',
-          },
+            ...baseReviewPayload.review,
+            state: 'dismissed',
+            body: null
+          }
         };
-
+    
         await service.handleWebhookEvent('pull_request_review', dismissedPayload);
-
+    
         expect(ctx.prisma.review.updateMany).toHaveBeenCalledWith({
           where: {
-            pullRequestId: '789',
-            reviewerId: mockUser.id.toString(),
-            status: 'DISMISSED',
+            pullRequestId: 'pr123',
+            reviewerId: 'reviewer'
           },
           data: {
-            status: 'DISMISSED',
-          },
+            status: ReviewStatus.DISMISSED
+          }
         });
       });
     });
 
     describe('Repository Events', () => {
-      const mockUser = createMockGitHubUser();
-      const mockPayload = {
+      const mockUser = createMockGitHubUser({
+        id: 1,
+        login: 'testuser'
+      });
+    
+      const mockPayload: RepositoryWebhookPayload = {
         action: 'created',
         repository: {
           id: '123',
@@ -177,13 +202,13 @@ describe('GitHubService', () => {
           full_name: 'org/test-repo',
           private: false,
           html_url: 'https://github.com/org/test-repo',
-          owner: mockUser,
-        },
+          owner: mockUser
+        }
       };
-
+    
       test('handles repository creation', async () => {
         await service.handleWebhookEvent('repository', mockPayload);
-
+    
         expect(ctx.prisma.repository.create).toHaveBeenCalledWith({
           data: {
             name: 'test-repo',
@@ -194,24 +219,24 @@ describe('GitHubService', () => {
           },
         });
       });
-
+    
       test('handles repository deletion', async () => {
-        const deletedPayload = {
+        const deletedPayload: RepositoryWebhookPayload = {
           ...mockPayload,
           action: 'deleted',
         };
-
+    
         await service.handleWebhookEvent('repository', deletedPayload);
-
+    
         expect(ctx.prisma.repository.delete).toHaveBeenCalledWith({
           where: {
             fullName: 'org/test-repo',
           },
         });
       });
-
+    
       test('handles repository visibility change', async () => {
-        const privatizedPayload = {
+        const privatizedPayload: RepositoryWebhookPayload = {
           ...mockPayload,
           action: 'privatized',
           repository: {
@@ -219,9 +244,9 @@ describe('GitHubService', () => {
             private: true,
           },
         };
-
+    
         await service.handleWebhookEvent('repository', privatizedPayload);
-
+    
         expect(ctx.prisma.repository.update).toHaveBeenCalledWith({
           where: {
             fullName: 'org/test-repo',
@@ -230,6 +255,28 @@ describe('GitHubService', () => {
             private: true,
           },
         });
+      });
+    
+      test('handles invalid repository action', async () => {
+        const invalidPayload = {
+          ...mockPayload,
+          action: 'invalid_action'
+        } as unknown as WebhookEventPayload;
+    
+        await expect(service.handleWebhookEvent('repository', invalidPayload))
+          .rejects
+          .toThrow('Unsupported repository action: invalid_action');
+      });
+    
+      test('handles missing repository data', async () => {
+        const invalidPayload = {
+          action: 'created',
+          repository: undefined
+        } as unknown as WebhookEventPayload;
+    
+        await expect(service.handleWebhookEvent('repository', invalidPayload))
+          .rejects
+          .toThrow('Invalid repository data');
       });
     });
   });

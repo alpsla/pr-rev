@@ -1,19 +1,24 @@
-import type { Repository, PullRequest, PullRequestReview } from '../../types';
+import type { PullRequest } from '../../types';
+import { RateLimitError, AuthenticationError, NotFoundError, ServerError, NetworkError } from '../../errors';
 
-interface RequestOptions {
-  headers?: {
-    authorization?: string;
-    'x-test-scenario'?: string;
-  };
-}
+export const mockErrors = {
+  rateLimit: new RateLimitError('API rate limit exceeded'),
+  unauthorized: new AuthenticationError('Bad credentials'),
+  notFound: new NotFoundError('Not Found'),
+  serverError: new ServerError('Internal Server Error', undefined, { statusCode: 500 }),
+  networkError: new NetworkError('Network error')
+};
 
-// Mock repository response
-export const mockRepository: Repository = {
+export const mockRequest = {
+    intercept: jest.fn()
+};
+
+export const mockRepository = {
   id: 1,
   name: 'test-repo',
   fullName: 'test-owner/test-repo',
-  private: false,
   description: 'Test repository',
+  private: false,
   defaultBranch: 'main',
   language: 'TypeScript',
   stargazersCount: 0,
@@ -29,110 +34,92 @@ export const mockRepository: Repository = {
   }
 };
 
-// Mock pull request response
 export const mockPullRequest: PullRequest = {
+  url: 'https://api.github.com/repos/test-owner/test-repo/pulls/1',
+  id: 1,
+  node_id: 'PR_1',
+  html_url: 'https://github.com/test-owner/test-repo/pull/1',
+  diff_url: 'https://github.com/test-owner/test-repo/pull/1.diff',
+  patch_url: 'https://github.com/test-owner/test-repo/pull/1.patch',
+  issue_url: 'https://api.github.com/repos/test-owner/test-repo/issues/1',
+  commits_url: 'https://api.github.com/repos/test-owner/test-repo/pulls/1/commits',
+  review_comments_url: 'https://api.github.com/repos/test-owner/test-repo/pulls/1/comments',
+  review_comment_url: 'https://api.github.com/repos/test-owner/test-repo/pulls/comments{/number}',
+  comments_url: 'https://api.github.com/repos/test-owner/test-repo/issues/1/comments',
+  statuses_url: 'https://api.github.com/repos/test-owner/test-repo/statuses/sha',
   number: 1,
-  title: 'Test PR',
-  body: 'Test PR description',
   state: 'open',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
+  title: 'Test Pull Request',
+  user: {
+      login: 'test-user',
+      avatarUrl: 'https://github.com/images/error/octocat_happy.gif',
+      type: 'User'
+  },
+  body: 'Test pull request body',
+  createdAt: '2023-01-01T00:00:00Z',
+  updatedAt: '2023-01-01T00:00:00Z',
   mergedAt: null,
-  changedFiles: 1,
-  additions: 10,
-  deletions: 5,
+  assignee: null,
+  assignees: [],
+  requested_reviewers: [],
+  requested_teams: [],
+  milestone: undefined,
   draft: false,
+  head: {
+      ref: 'test-branch',
+      sha: 'sha',
+      repo: {
+          id: 1,
+          name: 'test-repo',
+          url: 'https://api.github.com/repos/test-owner/test-repo'
+      }
+  },
+  base: {
+      ref: 'main',
+      sha: 'sha',
+       repo: {
+          id: 1,
+          name: 'test-repo',
+          url: 'https://api.github.com/repos/test-owner/test-repo'
+      }
+  },
+  _links: {
+      self: {
+          href: 'https://api.github.com/repos/test-owner/test-repo/pulls/1'
+      },
+      html: {
+          href: 'https://github.com/test-owner/test-repo/pull/1'
+      },
+      issue: {
+          href: 'https://api.github.com/repos/test-owner/test-repo/issues/1'
+      },
+      comments: {
+          href: 'https://api.github.com/repos/test-owner/test-repo/issues/1/comments'
+      },
+      review_comments: {
+          href: 'https://api.github.com/repos/test-owner/test-repo/pulls/1/comments'
+      },
+      review_comment: {
+          href: 'https://api.github.com/repos/test-owner/test-repo/pulls/comments{/number}'
+      },
+      commits: {
+          href: 'https://api.github.com/repos/test-owner/test-repo/pulls/1/commits'
+      },
+      statuses: {
+          href: 'https://api.github.com/repos/test-owner/test-repo/statuses/sha'
+      }
+  },
+  merged: false,
   mergeable: true,
   rebaseable: true,
-  labels: ['enhancement'],
   mergeableState: 'mergeable',
-  ciStatus: 'success',
-  milestone: 'v1.0'
+  mergeable_state: 'clean', 
+  changedFiles: 1,
+  additions: 1,
+  deletions: 1,
+  commits: 1,
+  comments: 1,
+  review_comments: 1,
+  maintainer_can_modify: true,
+   labels: [],
 };
-
-// Mock review response
-export const mockReview: PullRequestReview = {
-  id: 1,
-  user: {
-    login: 'reviewer',
-    avatarUrl: 'https://github.com/images/reviewer.png',
-    type: 'USER',
-    role: 'REVIEWER'
-  },
-  body: 'Looks good!',
-  state: 'APPROVED',
-  commitId: 'abc123',
-  submittedAt: new Date().toISOString()
-};
-
-// Mock request handlers
-export const mockRequestHandlers = {
-  getRepository: jest.fn().mockResolvedValue(mockRepository),
-  getPullRequest: jest.fn().mockResolvedValue(mockPullRequest),
-  getPullRequestReviews: jest.fn().mockResolvedValue([mockReview]),
-  createPullRequestReview: jest.fn().mockImplementation((review) => ({
-    ...mockReview,
-    body: review.body || mockReview.body,
-    state: review.state || mockReview.state
-  }))
-};
-
-// Mock error responses
-export const mockErrors = {
-  notFound: {
-    status: 404,
-    message: 'Not Found',
-    documentation_url: 'https://docs.github.com/rest'
-  },
-  rateLimit: {
-    status: 403,
-    message: 'API rate limit exceeded',
-    documentation_url: 'https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting'
-  },
-  unauthorized: {
-    status: 401,
-    message: 'Bad credentials',
-    documentation_url: 'https://docs.github.com/rest'
-  },
-  serverError: {
-    status: 500,
-    message: 'Internal Server Error',
-    documentation_url: 'https://docs.github.com/rest'
-  }
-};
-
-// Mock request interceptor
-export const mockRequest = {
-  intercept: jest.fn().mockImplementation((url: string, options: RequestOptions) => {
-    // Simulate rate limit
-    if (options.headers?.['x-test-scenario'] === 'rate-limit') {
-      throw mockErrors.rateLimit;
-    }
-
-    // Simulate unauthorized
-    if (options.headers?.authorization === 'token invalid-token') {
-      throw mockErrors.unauthorized;
-    }
-
-    // Simulate not found
-    if (url.includes('non-existent-repo')) {
-      throw mockErrors.notFound;
-    }
-
-    // Handle successful requests
-    if (url.includes('/repos/')) {
-      if (url.includes('/pulls/')) {
-        if (url.includes('/reviews')) {
-          return mockRequestHandlers.getPullRequestReviews();
-        }
-        return mockRequestHandlers.getPullRequest();
-      }
-      return mockRequestHandlers.getRepository();
-    }
-
-    throw mockErrors.notFound;
-  })
-};
-
-// Export mock factory
-export const createRequestMock = () => mockRequest;

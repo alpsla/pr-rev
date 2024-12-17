@@ -1,6 +1,10 @@
-import type { MockRepository, MockGitHubUser, MockPullRequest } from './mock-types';
+import type { MockRepository, GitHubAPIUser, MockPullRequest } from './mock-types';
+import type { RestEndpointMethodTypes } from '@octokit/rest';
+import { ReviewStatus } from '@prisma/client';
 
-const createMockUser = (owner: string): MockGitHubUser => ({
+type ReposGetResponse = RestEndpointMethodTypes['repos']['get']['response'];
+
+const createMockUser = (owner: string): GitHubAPIUser => ({
   login: owner,
   id: 1,
   node_id: 'U_1',
@@ -209,3 +213,73 @@ export const createMockPullRequestResponse = (owner: string, repo: string, numbe
   changed_files: 1,
   ...overrides
 });
+
+export const mockGithubRepoResponse: ReposGetResponse = {
+  data: createMockRepositoryResponse('testowner', 'test-repo'),
+  status: 200,
+  headers: {},
+  url: 'https://api.github.com/repos/testowner/test-repo'
+};
+
+export const mockPullRequestResponse = {
+  data: createMockPullRequestResponse('testowner', 'test-repo', 1),
+  status: 200,
+  headers: {},
+  url: 'https://api.github.com/repos/testowner/test-repo/pulls/1'
+};
+
+export const mockPullRequestReviewsResponse = {
+  data: [{
+    id: 1,
+    node_id: 'PRR_1',
+    user: createMockUser('testowner'),
+    body: 'LGTM',
+    state: ReviewStatus.APPROVED,  // Updated to use ReviewStatus
+    html_url: 'https://github.com/testowner/test-repo/pull/1#pullrequestreview-1',
+    pull_request_url: 'https://api.github.com/repos/testowner/test-repo/pulls/1',
+    author_association: 'COLLABORATOR',
+    submitted_at: '2024-01-01T00:00:00Z',
+    commit_id: 'abc123',
+    _links: {
+      html: { href: 'https://github.com/testowner/test-repo/pull/1#pullrequestreview-1' },
+      pull_request: { href: 'https://api.github.com/repos/testowner/test-repo/pulls/1' }
+    }
+  }],
+  status: 200,
+  headers: {},
+  url: 'https://api.github.com/repos/testowner/test-repo/pulls/1/reviews'
+};
+
+export const mockRateLimitResponse: RestEndpointMethodTypes['rateLimit']['get']['response'] = {
+  data: {
+    resources: {
+      core: {
+        limit: 5000,
+        remaining: 4999,
+        reset: Math.floor(Date.now() / 1000) + 3600,
+        used: 1
+      },
+      search: {
+        limit: 30,
+        remaining: 30,
+        reset: Math.floor(Date.now() / 1000) + 3600,
+        used: 0
+      },
+      graphql: {
+        limit: 5000,
+        remaining: 5000,
+        reset: Math.floor(Date.now() / 1000) + 3600,
+        used: 0
+      }
+    },
+    rate: {
+      limit: 5000,
+      remaining: 4999,
+      reset: Math.floor(Date.now() / 1000) + 3600,
+      used: 1
+    }
+  },
+  status: 200,
+  headers: {},
+  url: 'https://api.github.com/rate_limit'
+};

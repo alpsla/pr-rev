@@ -1,6 +1,8 @@
-import type { RestEndpointMethodTypes } from '@octokit/rest';
-import type { Octokit } from '@octokit/rest';
-import type { PrismaClient, PlatformType } from '@prisma/client';
+import type { RestEndpointMethodTypes, Octokit } from '@octokit/rest';
+import type { PullRequestReview, Repository, PullRequest } from '../../types';
+import type { PrismaClient, PlatformType, Platform } from '@prisma/client';
+import { GitHubWebhookUser } from '../../types';
+import { jest } from '@jest/globals';
 import { 
   mockRateLimitExceededError,
   mockNotFoundError,
@@ -16,9 +18,15 @@ import {
   mockPullRequestReviewsResponse,
   mockRateLimitResponse
 } from '../mocks/responses';
-import { jest } from '@jest/globals';
 
-// Types
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: JsonValue }
+  | JsonValue[];
+
 export interface MockContext {
   prisma: jest.Mocked<PrismaClient>;
   octokit: jest.Mocked<Octokit>;
@@ -29,23 +37,16 @@ export interface MockContext {
   };
 }
 
-export interface MockGitHubUser {
-  id: number;
-  login: string;
-  name: string;
-  email: string;
-  avatarUrl: string;
-}
-
-export interface MockRepository {
-  id: number;
-  name: string;
-  fullName: string;
-  description: string;
-  private: boolean;
-  owner: MockGitHubUser;
-  defaultBranch: string;
-  language: string;
+// Export the mock repository interface
+export interface MockRepository extends Pick<Repository, 
+  'id' | 
+  'name' | 
+  'fullName' | 
+  'private' | 
+  'description' | 
+  'defaultBranch' | 
+  'language'> {
+  owner: GitHubWebhookUser;
   fork: boolean;
   archived: boolean;
   disabled: boolean;
@@ -54,15 +55,21 @@ export interface MockRepository {
   updatedAt: string;
 }
 
-export interface MockPullRequest {
+// Export the mock pull request interface
+export interface MockPullRequest extends Pick<PullRequest, 
+  'number' | 
+  'title' | 
+  'body' | 
+  'state' | 
+  'createdAt' | 
+  'updatedAt' | 
+  'draft' | 
+  'mergeable' | 
+  'rebaseable' | 
+  'mergeableState'> {
   id: number;
-  number: number;
-  title: string;
-  body: string;
-  state: 'open' | 'closed';
   locked: boolean;
-  draft: boolean;
-  user: MockGitHubUser;
+  user: GitHubWebhookUser;
   base: {
     ref: string;
     sha: string;
@@ -73,20 +80,109 @@ export interface MockPullRequest {
     sha: string;
     repo: MockRepository;
   };
-  mergeable: boolean;
-  rebaseable: boolean;
-  mergeableState: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
-// Mock Factory Functions
-export const createMockGitHubUser = (overrides: Partial<MockGitHubUser> = {}): MockGitHubUser => ({
-  id: 1,
+// Factory Functions
+export const createMockContext = (): MockContext => {
+  const ctx: MockContext = {
+    prisma: {
+      $connect: jest.fn<() => Promise<void>>(),
+      $disconnect: jest.fn<() => Promise<void>>(),
+      platform: {
+        findFirstOrThrow: jest.fn(),
+      },
+      repository: {
+        create: jest.fn<() => Promise<Repository>>(),
+        update: jest.fn<() => Promise<Repository>>(),
+        delete: jest.fn<() => Promise<Repository>>(),
+        upsert: jest.fn<() => Promise<Repository>>(),
+      },
+      pullRequest: {
+        create: jest.fn<() => Promise<PullRequest>>(),
+        update: jest.fn<() => Promise<PullRequest>>(),
+        upsert: jest.fn<() => Promise<PullRequest>>(),
+      },
+      review: {
+        create: jest.fn().mockImplementation((): Promise<PullRequestReview> => Promise.resolve({
+          id: 1,
+          user: {
+            login: 'testuser',
+            avatarUrl: 'https://github.com/testuser.png',
+            type: 'User',
+            role: 'REVIEWER'
+          },
+          body: 'Test review',
+          state: 'APPROVED',
+          commitId: 'abc123',
+          submittedAt: new Date().toISOString(),
+        })),
+        updateMany: jest.fn().mockImplementation((): Promise<{ count: number }> => Promise.resolve({ count: 1 })),
+      },
+    } as unknown as jest.Mocked<PrismaClient>,
+    octokit: {
+      rest: {
+        rateLimit: {
+          get: jest.fn(),
+        },
+        pulls: {
+          get: jest.fn(),
+          listReviews: jest.fn(),
+        },
+        repos: {
+          get: jest.fn(),
+        },
+      },
+      request: jest.fn(),
+      graphql: jest.fn(),
+      paginate: jest.fn(),
+      hook: {
+        before: jest.fn(),
+        after: jest.fn(),
+        error: jest.fn(),
+        wrap: jest.fn(),
+      },
+    } as unknown as jest.Mocked<Octokit>,
+    responses: {
+      repository: mockGithubRepoResponse,
+      pullRequest: mockPullRequestResponse,
+      pullRequestReview: mockPullRequestReviewsResponse,
+    },
+  }
+
+  return ctx;
+};
+
+export const createMockGitHubUser = (overrides: Partial<GitHubWebhookUser> = {}): GitHubWebhookUser => ({
   login: 'testuser',
-  name: 'Test User',
-  email: 'test@example.com',
-  avatarUrl: 'https://github.com/testuser.png',
+  id: 1,
+  node_id: 'MDQ6VXNlcjE=',
+  avatar_url: 'https://github.com/testuser.png',
+  gravatar_id: null,
+  url: 'https://api.github.com/users/testuser',
+  html_url: 'https://github.com/testuser',
+  followers_url: 'https://api.github.com/users/testuser/followers',
+  following_url: 'https://api.github.com/users/testuser/following{/other_user}',
+  gists_url: 'https://api.github.com/users/testuser/gists{/gist_id}',
+  starred_url: 'https://api.github.com/users/testuser/starred{/owner}{/repo}',
+  subscriptions_url: 'https://api.github.com/users/testuser/subscriptions',
+  organizations_url: 'https://api.github.com/users/testuser/orgs',
+  repos_url: 'https://api.github.com/users/testuser/repos',
+  events_url: 'https://api.github.com/users/testuser/events{/privacy}',
+  received_events_url: 'https://api.github.com/users/testuser/received_events',
+  type: 'User',
+  site_admin: false,
+  ...overrides
+});
+
+export const createMockPlatform = (overrides: Partial<Platform> = {}): Platform => ({
+  id: 'platform-1',
+  name: 'GitHub',
+  type: 'GITHUB' as PlatformType,
+  enabled: true,
+  config: {} as JsonValue,
+  capabilities: {} as JsonValue,
+  createdAt: new Date(),
+  updatedAt: new Date(),
   ...overrides
 });
 
@@ -129,77 +225,89 @@ export const createMockPullRequest = (overrides: Partial<MockPullRequest> = {}):
   },
   mergeable: true,
   rebaseable: true,
-  mergeableState: 'clean',
+  mergeableState: 'mergeable',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   ...overrides
 });
 
-export const createMockContext = (): MockContext => {
-  const ctx: MockContext = {
-    prisma: {
-      $connect: jest.fn(),
-      $disconnect: jest.fn(),
-      platform: {
-        findFirstOrThrow: jest.fn(),
-      },
-      repository: {
-        create: jest.fn(),
-        update: jest.fn(),
-        delete: jest.fn(),
-        upsert: jest.fn(),
-      },
-      pullRequest: {
-        create: jest.fn(),
-        update: jest.fn(),
-        upsert: jest.fn(),
-      },
-      review: {
-        create: jest.fn(),
-        updateMany: jest.fn(),
-      },
-    } as unknown as jest.Mocked<PrismaClient>,
-    octokit: {
-      rest: {
-        rateLimit: {
-          get: jest.fn(),
-        },
-        pulls: {
-          get: jest.fn(),
-          listReviews: jest.fn(),
-        },
-        repos: {
-          get: jest.fn(),
-        },
-      },
-    } as unknown as jest.Mocked<Octokit>,
-    responses: {
-      repository: mockGithubRepoResponse,
-      pullRequest: mockPullRequestResponse,
-      pullRequestReview: mockPullRequestReviewsResponse,
-    },
-  };
-
-  return ctx;
-};
-
 // Setup Functions
 export const setupSuccessfulMocks = (ctx: MockContext): void => {
-  ctx.octokit.rest.rateLimit.get.mockResolvedValue(mockRateLimitResponse);
+  ctx.octokit.rest.rateLimit.get.mockResolvedValue({
+    data: {
+      resources: {
+        core: {
+          limit: 5000,
+          remaining: 4999,
+          reset: Math.floor(Date.now() / 1000) + 3600,
+          used: 1
+        },
+        search: {
+          limit: 30,
+          remaining: 30,
+          reset: Math.floor(Date.now() / 1000) + 3600,
+          used: 0
+        },
+        graphql: {
+          limit: 5000,
+          remaining: 5000,
+          reset: Math.floor(Date.now() / 1000) + 3600,
+          used: 0
+        },
+        integration_manifest: {
+          limit: 5000,
+          remaining: 5000,
+          reset: Math.floor(Date.now() / 1000) + 3600,
+          used: 0
+        },
+        code_scanning_upload: {
+          limit: 500,
+          remaining: 500,
+          reset: Math.floor(Date.now() / 1000) + 3600,
+          used: 0
+        },
+        actions_runner_registration: {
+          limit: 10000,
+          remaining: 10000,
+          reset: Math.floor(Date.now() / 1000) + 3600,
+          used: 0
+        },
+        scim: {
+          limit: 15000,
+          remaining: 15000,
+          reset: Math.floor(Date.now() / 1000) + 3600,
+          used: 0
+        },
+        dependency_snapshots: {
+          limit: 100,
+          remaining: 100,
+          reset: Math.floor(Date.now() / 1000) + 3600,
+          used: 0
+        }
+      },
+      rate: {
+        limit: 5000,
+        remaining: 4999,
+        reset: Math.floor(Date.now() / 1000) + 3600,
+        used: 1
+      }
+    },
+    status: 200,
+    headers: {},
+    url: 'https://api.github.com/rate_limit'
+  });
+
+  ctx.octokit.rest.repos.get.mockResolvedValue(ctx.responses.repository);
   ctx.octokit.rest.pulls.get.mockResolvedValue(ctx.responses.pullRequest);
   ctx.octokit.rest.pulls.listReviews.mockResolvedValue(ctx.responses.pullRequestReview);
-  ctx.octokit.rest.repos.get.mockResolvedValue(ctx.responses.repository);
+};
 
-  ctx.prisma.platform.findFirstOrThrow.mockResolvedValue({
-    id: '1',
-    type: 'GITHUB' as PlatformType,
-    name: 'GitHub',
-    enabled: true,
-    config: {},
-    capabilities: {},
-    createdAt: new Date(),
-    updatedAt: new Date()
-  });
+export const setupRateLimitExceededMocks = (ctx: MockContext): void => {
+  const rateLimitError = mockRateLimitExceededError;
+  ctx.octokit.rest.rateLimit.get.mockRejectedValue(rateLimitError);
+  ctx.octokit.rest.repos.get.mockRejectedValue(rateLimitError);
+  ctx.octokit.rest.pulls.get.mockRejectedValue(rateLimitError);
+  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(rateLimitError);
 };
 
 export const setupValidationErrorMocks = (ctx: MockContext): void => {
@@ -230,46 +338,12 @@ export const setupInvalidResponseMocks = (ctx: MockContext): void => {
   ctx.octokit.rest.repos.get.mockRejectedValue(mockInvalidResponseError);
 };
 
-export const setupRateLimitExceededMocks = (ctx: MockContext, headers?: Record<string, string>): void => {
-  const error = headers ? {
-    ...mockRateLimitExceededError,
-    response: {
-      ...mockRateLimitExceededError.response,
-      headers: {
-        ...mockRateLimitExceededError.response?.headers,
-        ...headers
-      }
-    }
-  } : mockRateLimitExceededError;
-
-  ctx.octokit.rest.rateLimit.get.mockResolvedValueOnce({
-    ...mockRateLimitResponse,
-    data: {
-      ...mockRateLimitResponse.data,
-      resources: {
-        ...mockRateLimitResponse.data.resources,
-        core: {
-          limit: 5000,
-          remaining: 0,
-          reset: Math.floor(Date.now() / 1000) + 3600,
-          used: 5000
-        }
-      }
-    }
-  });
-
-  ctx.octokit.rest.pulls.get.mockRejectedValue(error);
-  ctx.octokit.rest.pulls.listReviews.mockRejectedValue(error);
-  ctx.octokit.rest.repos.get.mockRejectedValue(error);
-};
-
 export const setupNetworkErrorMocks = (ctx: MockContext, code = 'ECONNREFUSED'): void => {
   ctx.octokit.rest.rateLimit.get.mockResolvedValue(mockRateLimitResponse);
   const error = {
     ...mockNetworkError,
     code
   };
-
   ctx.octokit.rest.pulls.get.mockRejectedValue(error);
   ctx.octokit.rest.pulls.listReviews.mockRejectedValue(error);
   ctx.octokit.rest.repos.get.mockRejectedValue(error);
@@ -297,14 +371,15 @@ export const setupServerErrorMocks = (ctx: MockContext): void => {
 };
 
 export const setupPrismaErrorMocks = (ctx: MockContext): void => {
-  ctx.prisma.platform.findFirstOrThrow.mockRejectedValue(new Error('Database error'));
-  ctx.prisma.repository.create.mockRejectedValue(new Error('Database error'));
-  ctx.prisma.repository.update.mockRejectedValue(new Error('Database error'));
-  ctx.prisma.repository.delete.mockRejectedValue(new Error('Database error'));
-  ctx.prisma.repository.upsert.mockRejectedValue(new Error('Database error'));
-  ctx.prisma.pullRequest.create.mockRejectedValue(new Error('Database error'));
-  ctx.prisma.pullRequest.update.mockRejectedValue(new Error('Database error'));
-  ctx.prisma.pullRequest.upsert.mockRejectedValue(new Error('Database error'));
-  ctx.prisma.review.create.mockRejectedValue(new Error('Database error'));
-  ctx.prisma.review.updateMany.mockRejectedValue(new Error('Database error'));
+  const dbError = new Error('Database error');
+  ctx.prisma.platform.findFirstOrThrow.mockRejectedValue(dbError);
+  ctx.prisma.repository.create.mockRejectedValue(dbError);
+  ctx.prisma.repository.update.mockRejectedValue(dbError);
+  ctx.prisma.repository.delete.mockRejectedValue(dbError);
+  ctx.prisma.repository.upsert.mockRejectedValue(dbError);
+  ctx.prisma.pullRequest.create.mockRejectedValue(dbError);
+  ctx.prisma.pullRequest.update.mockRejectedValue(dbError);
+  ctx.prisma.pullRequest.upsert.mockRejectedValue(dbError);
+  ctx.prisma.review.create.mockRejectedValue(dbError);
+  ctx.prisma.review.updateMany.mockRejectedValue(dbError);
 };

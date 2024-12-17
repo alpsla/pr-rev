@@ -3,6 +3,12 @@ import { GitHubService } from '../../interfaces';
 import { createMockContext } from '../mocks/prisma';
 import { createMockGitHubUser } from '../utils/mock-factory';
 import { createMockOctokit } from '../mocks/octokit';
+import { ReviewStatus } from '@prisma/client';  // Add this import
+import { 
+  PullRequestWebhookPayload, 
+  ReviewWebhookPayload,
+  RepositoryWebhookPayload
+} from '../../types';
 
 describe('GitHubService Webhook Handling', () => {
   let service: GitHubService;
@@ -19,30 +25,40 @@ describe('GitHubService Webhook Handling', () => {
     );
   });
 
+  const mockUser = createMockGitHubUser();
+  const baseRepository = {
+    id: '123',
+    name: 'test-repo',
+    full_name: 'org/test-repo',
+    private: false,
+    html_url: 'https://github.com/org/test-repo',
+    owner: {
+      login: mockUser.login,
+      avatar_url: mockUser.avatar_url
+    }
+  };
+
   describe('Pull Request Events', () => {
-    const mockUser = createMockGitHubUser();
-    const mockPayload = {
+    const mockPayload: PullRequestWebhookPayload = {
       action: 'opened',
       pull_request: {
         number: 1,
         title: 'Test PR',
+        body: '',
         state: 'open',
-        user: mockUser,
-        head: {
-          ref: 'feature',
-          sha: 'abc123',
-        },
-        base: {
-          ref: 'main',
-        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        merged_at: null,
         draft: false,
+        mergeable: null,
+        rebaseable: null,
+        labels: [],
+        user: {
+          login: mockUser.login,
+          avatar_url: mockUser.avatar_url
+        }
       },
-      repository: {
-        id: '123',
-        name: 'test-repo',
-        full_name: 'org/test-repo',
-        owner: mockUser,
-      },
+      repository: baseRepository
     };
 
     it('handles opened pull request', async () => {
@@ -60,7 +76,7 @@ describe('GitHubService Webhook Handling', () => {
           title: 'Test PR',
           status: 'OPEN',
           repositoryId: '123',
-          authorId: mockUser.id.toString(),
+          authorId: mockUser.login,
           baseBranch: 'main',
           headBranch: 'feature',
           isDraft: false,
@@ -76,15 +92,15 @@ describe('GitHubService Webhook Handling', () => {
     });
 
     it('handles closed pull request', async () => {
-      const closedPayload = {
+      const closedPayload: PullRequestWebhookPayload = {
         ...mockPayload,
         action: 'closed',
         pull_request: {
           ...mockPayload.pull_request,
           state: 'closed',
-          merged: true,
           merged_at: '2024-01-01T00:00:00Z',
-        },
+          merged: true
+        }
       };
 
       await service.handleWebhookEvent('pull_request', closedPayload);
@@ -108,27 +124,24 @@ describe('GitHubService Webhook Handling', () => {
   });
 
   describe('Review Events', () => {
-    const mockUser = createMockGitHubUser();
-    const mockPayload = {
+    const mockPayload: ReviewWebhookPayload = {
       action: 'submitted',
       review: {
-        id: '456',
-        user: mockUser,
+        id: 456,
+        user: {
+          login: mockUser.login,
+          avatar_url: mockUser.avatar_url
+        },
         body: 'LGTM',
-        state: 'APPROVED',
+        state: ReviewStatus.APPROVED,  // Use ReviewStatus enum
         submitted_at: '2024-01-01T00:00:00Z',
+        commit_id: 'abc123'
       },
       pull_request: {
-        id: '789',
         number: 1,
-        user: mockUser,
+        id: '789'
       },
-      repository: {
-        id: '123',
-        name: 'test-repo',
-        full_name: 'org/test-repo',
-        owner: mockUser,
-      },
+      repository: baseRepository
     };
 
     it('handles submitted review', async () => {
@@ -137,8 +150,8 @@ describe('GitHubService Webhook Handling', () => {
       expect(ctx.prisma.review.create).toHaveBeenCalledWith({
         data: {
           pullRequestId: '789',
-          reviewerId: mockUser.id.toString(),
-          status: 'APPROVED',
+          reviewerId: mockUser.login,
+          status: ReviewStatus.APPROVED,  // Use ReviewStatus enum
           body: 'LGTM',
           submittedAt: new Date('2024-01-01T00:00:00Z'),
         },
@@ -146,13 +159,13 @@ describe('GitHubService Webhook Handling', () => {
     });
 
     it('handles dismissed review', async () => {
-      const dismissedPayload = {
+      const dismissedPayload: ReviewWebhookPayload = {
         ...mockPayload,
         action: 'dismissed',
         review: {
           ...mockPayload.review,
-          state: 'DISMISSED',
-        },
+          state: ReviewStatus.DISMISSED,  // Use ReviewStatus enum
+        }
       };
 
       await service.handleWebhookEvent('pull_request_review', dismissedPayload);
@@ -160,28 +173,20 @@ describe('GitHubService Webhook Handling', () => {
       expect(ctx.prisma.review.updateMany).toHaveBeenCalledWith({
         where: {
           pullRequestId: '789',
-          reviewerId: mockUser.id.toString(),
-          status: 'DISMISSED',
+          reviewerId: mockUser.login,
+          status: ReviewStatus.DISMISSED,  // Use ReviewStatus enum
         },
         data: {
-          status: 'DISMISSED',
+          status: ReviewStatus.DISMISSED,  // Use ReviewStatus enum
         },
       });
     });
   });
 
   describe('Repository Events', () => {
-    const mockUser = createMockGitHubUser();
-    const mockPayload = {
+    const mockPayload: RepositoryWebhookPayload = {
       action: 'created',
-      repository: {
-        id: '123',
-        name: 'test-repo',
-        full_name: 'org/test-repo',
-        private: false,
-        html_url: 'https://github.com/org/test-repo',
-        owner: mockUser,
-      },
+      repository: baseRepository
     };
 
     it('handles repository creation', async () => {
@@ -199,7 +204,7 @@ describe('GitHubService Webhook Handling', () => {
     });
 
     it('handles repository deletion', async () => {
-      const deletedPayload = {
+      const deletedPayload: RepositoryWebhookPayload = {
         ...mockPayload,
         action: 'deleted',
       };
@@ -214,13 +219,13 @@ describe('GitHubService Webhook Handling', () => {
     });
 
     it('handles repository visibility change', async () => {
-      const privatizedPayload = {
+      const privatizedPayload: RepositoryWebhookPayload = {
         ...mockPayload,
         action: 'privatized',
         repository: {
-          ...mockPayload.repository,
+          ...baseRepository,
           private: true,
-        },
+        }
       };
 
       await service.handleWebhookEvent('repository', privatizedPayload);

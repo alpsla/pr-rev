@@ -63,7 +63,7 @@ export const errorScenarios: TestResult[] = [
     status: 'failed',
     errorType: 'ServerError',
     expectedStatus: 500,
-    expectedMessage: new ServerError().message
+    expectedMessage: new ServerError('An unexpected server error occurred').message // Added a default message
   }
 ];
 

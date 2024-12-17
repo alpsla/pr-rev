@@ -15,9 +15,20 @@ describe('GitHub Service Hybrid Tests', () => {
       { type: 'token', credentials: { token: 'test-token' } }
     );
 
-    // Set up default rate limit response
+    // Mock the platform findFirstOrThrow to return a valid platform
+    ctx.prisma.platform.findFirstOrThrow.mockResolvedValue({
+      id: 'platform-1',
+      type: 'GITHUB',
+      name: 'GitHub',
+      enabled: true,
+      config: {},
+      capabilities: {},
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
     ctx.octokit.rest.rateLimit.get.mockResolvedValue(mockRateLimitResponse);
-  });
+});
 
   describe('Repository Hybrid Tests', () => {
     test('should handle repository data with all optional fields', async () => {

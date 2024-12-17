@@ -1,4 +1,5 @@
 import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-methods';
+import { ReviewStatus } from '@prisma/client';
 
 type RateLimitGetResponse = RestEndpointMethodTypes['rateLimit']['get']['response'];
 type ReposGetResponse = RestEndpointMethodTypes['repos']['get']['response'];
@@ -462,7 +463,7 @@ export const mockPullRequestReviewsResponse: PullsListReviewsResponse = {
     node_id: 'PRR_1',
     user: mockUser,
     body: 'LGTM',
-    state: 'APPROVED',
+    state: ReviewStatus.APPROVED,  // Updated to use ReviewStatus
     html_url: 'https://github.com/test-owner/test-repo/pull/1#pullrequestreview-1',
     pull_request_url: 'https://api.github.com/repos/test-owner/test-repo/pulls/1',
     author_association: 'COLLABORATOR',

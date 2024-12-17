@@ -1,6 +1,7 @@
 import { testConfig } from './test-config';
 import type { PullRequest, Repository, PullRequestReview } from '../types';
 import type { Octokit } from '@octokit/rest';
+import { ReviewStatus } from '@prisma/client';
 import { mockRateLimitResponse, mockGithubRepoResponse } from './mocks/responses';
 import { createMockOctokit } from './mocks/octokit';
 
@@ -29,7 +30,7 @@ export function createTestPR(overrides: Partial<PullRequest> = {}): PullRequest 
     rebaseable: true,
     labels: [],
     mergeableState: 'mergeable',
-    ciStatus: undefined,
+    mergeable_state: 'clean',
     milestone: undefined,
     ...overrides
   };
@@ -46,7 +47,6 @@ export function createTestRepo(overrides: Partial<Repository> = {}): Repository 
     language: 'TypeScript',
     stargazersCount: 0,
     forksCount: 0,
-    organizationId: undefined,
     settings: {
       id: '1-settings',
       repositoryId: '1',
@@ -70,7 +70,7 @@ export function createTestReview(overrides: Partial<PullRequestReview> = {}): Pu
       role: 'REVIEWER'
     },
     body: 'Test review',
-    state: 'APPROVED',
+    state: ReviewStatus.APPROVED,  // Updated to use ReviewStatus
     commitId: 'abc123',
     submittedAt: new Date().toISOString(),
     ...overrides

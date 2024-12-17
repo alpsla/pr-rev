@@ -92,19 +92,23 @@ export class NetworkError extends GitHubError {
 
 export class ServerError extends GitHubError {
   constructor(
-    message = 'Internal Server Error',
+    message: string,
     originalError?: unknown,
     context?: Record<string, unknown>
   ) {
-    super(message, 500, originalError, {
-      ...context,
-      errorType: 'server'
-    });
+    super(
+      message,
+      context?.statusCode as number || 500,
+      originalError,
+      {
+        errorType: 'server',
+        ...(context || {})
+      }
+    );
     this.name = 'ServerError';
     Object.setPrototypeOf(this, ServerError.prototype);
   }
 }
-
 export class ValidationError extends GitHubError {
   constructor(
     message = 'Validation Error',

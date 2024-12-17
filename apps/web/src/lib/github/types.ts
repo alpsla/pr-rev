@@ -1,15 +1,27 @@
+import { ReviewStatus } from '@prisma/client';
+
+// Repository Settings Types
+export interface RepositorySettings {
+  id: string;
+  repositoryId: string;
+  autoMergeEnabled: boolean;
+  requireApprovals: number;
+  protectedBranches: string[];
+  allowedMergeTypes: ('merge' | 'squash' | 'rebase')[];
+  branchProtection: Record<string, unknown>;
+}
+
 // Base GitHub Types
 export interface Repository {
   id: number;
   name: string;
   fullName: string;
+  description: string;
   private: boolean;
-  description: string | null;
   defaultBranch: string;
   language: string;
   stargazersCount: number;
   forksCount: number;
-  organizationId?: string;
   settings: RepositorySettings;
 }
 
@@ -27,10 +39,76 @@ export interface PullRequest {
   draft: boolean;
   mergeable: boolean | null;
   rebaseable: boolean | null;
-  labels: string[];
   mergeableState: 'mergeable' | 'conflicting' | 'unknown';
-  ciStatus?: string;
-  milestone?: string;
+  url?: string;
+  id?: number;
+  node_id?: string;
+  html_url?: string;
+  diff_url?: string;
+  patch_url?: string;
+  issue_url?: string;
+  commits_url?: string;
+  review_comments_url?: string;
+  review_comment_url?: string;
+  comments_url?: string;
+  statuses_url?: string;
+  user?: User;
+  head?: {
+      ref: string;
+      sha: string;
+      repo: {
+          id: number;
+          name: string;
+          url: string;
+      }
+  },
+  base?: {
+      ref: string;
+      sha: string;
+       repo: {
+          id: number;
+          name: string;
+          url: string;
+      }
+  },
+  _links?: {
+      self: {
+          href: string;
+      },
+      html: {
+          href: string;
+      },
+      issue: {
+          href: string;
+      },
+      comments: {
+          href: string;
+      },
+      review_comments: {
+          href: string;
+      },
+      review_comment: {
+          href: string;
+      },
+      commits: {
+          href: string;
+      },
+      statuses: {
+          href: string;
+      }
+  },
+  merged?: boolean;
+  mergeable_state: 'clean', // you can keep this for GitHub API compatibility
+  commits?: number;
+  comments?: number;
+  review_comments?: number;
+  maintainer_can_modify?: boolean;
+  assignee?: unknown;
+  assignees?: unknown[];
+  requested_reviewers?: unknown[];
+  requested_teams?: unknown[];
+  labels?: unknown[];
+  milestone?: string | undefined;
 }
 
 // PR Review Types
@@ -54,14 +132,22 @@ export interface ReviewComment {
   user: ReviewerInfo;
 }
 
+export interface User {
+  login: string;
+  avatarUrl: string;
+  type: string;
+  role?: 'REVIEWER' | 'AUTHOR';
+}
+
 export interface PullRequestReview {
   id: number;
-  user: ReviewerInfo;
+  user: User;
   body: string | null;
-  state: 'PENDING' | 'COMMENTED' | 'APPROVED' | 'CHANGES_REQUESTED' | 'DISMISSED';
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
   commitId: string;
-  submittedAt: string | null;
+  submittedAt: string;
 }
+
 
 // PR Interaction Types
 export interface CreateCommentParams {
@@ -99,7 +185,7 @@ export interface PullRequestUpdate {
 export interface PRApproval {
   id: string;
   reviewer: ReviewerInfo;
-  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';
+  state: ReviewStatus;
   submittedAt: string;
   body?: string;
   isFromBot: boolean;
@@ -107,7 +193,7 @@ export interface PRApproval {
 
 export interface CreateApprovalParams {
   body: string;
-  event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
+  event: ReviewStatus;
   botIdentifier?: string;
   comments?: CreateCommentParams[];
 }
@@ -144,6 +230,115 @@ export interface TeamMember {
 }
 
 // Webhook Types
+export interface GitHubWebhookUser {
+  login: string;
+  avatar_url: string;
+  id?: number;
+  node_id?: string;
+  gravatar_id?: string | null;
+  url?: string;
+  html_url?: string;
+  followers_url?: string;
+  following_url?: string;
+  gists_url?: string;
+  starred_url?: string;
+  subscriptions_url?: string;
+  organizations_url?: string;
+  repos_url?: string;
+  events_url?: string;
+  received_events_url?: string;
+  type?: string;
+  site_admin?: boolean;
+}
+
+export interface BaseWebhookPayload {
+  action: string;
+  repository: {
+    id: string;
+    name: string;
+    full_name: string;
+    private: boolean;
+    html_url: string;
+    owner: GitHubWebhookUser;
+  };
+}
+
+export interface PullRequestWebhookPayload extends BaseWebhookPayload {
+  action: 'opened' | 'closed' | 'reopened' | 'edited' | 'synchronize';
+  pull_request: {
+    number: number;
+    title: string;
+    state: 'open' | 'closed';
+    user: GitHubWebhookUser;
+    head?: {
+      ref: string;
+      sha: string;
+    };
+    base?: {
+      ref: string;
+    };
+    draft: boolean;
+    merged?: boolean;
+    merged_at?: string | null;
+    body?: string;
+    created_at?: string;
+    updated_at?: string;
+    mergeable?: boolean | null;
+    rebaseable?: boolean | null;
+    labels?: Array<{ name: string }>;
+  };
+}
+
+export interface ReviewWebhookPayload extends BaseWebhookPayload {
+  action: 'submitted' | 'edited' | 'dismissed';
+  review: {
+    id: number;
+    user: GitHubWebhookUser;
+    body: string | null;
+    state: ReviewStatus;
+    submitted_at: string;
+    commit_id: string;
+  };
+  pull_request: {
+    id: string;
+    number: number;
+    state?: 'open' | 'closed';
+    user?: GitHubWebhookUser;
+  };
+}
+
+export interface RepositoryWebhookPayload extends BaseWebhookPayload {
+  action: 'created' | 'deleted' | 'privatized' | 'publicized';
+  repository: {
+    id: string;
+    name: string;
+    full_name: string;
+    private: boolean;
+    html_url: string;
+    owner: GitHubWebhookUser;
+  };
+}
+
+export type WebhookEventPayload = 
+  | PullRequestWebhookPayload 
+  | ReviewWebhookPayload 
+  | RepositoryWebhookPayload;
+
+export type WebhookEventName = 'pull_request' | 'pull_request_review' | 'repository';
+
+// Type guards for webhook payloads
+export const isPullRequestPayload = (payload: WebhookEventPayload): payload is PullRequestWebhookPayload => {
+  return 'pull_request' in payload && !('review' in payload);
+};
+
+export const isPullRequestReviewPayload = (payload: WebhookEventPayload): payload is ReviewWebhookPayload => {
+  return 'review' in payload && 'pull_request' in payload;
+};
+
+export const isRepositoryPayload = (payload: WebhookEventPayload): payload is RepositoryWebhookPayload => {
+  return !('pull_request' in payload) && !('review' in payload);
+};
+
 export interface Webhook {
   id: string;
   repositoryId: string;
@@ -214,17 +409,6 @@ export interface OctokitResponse<T> {
   url: string;
 }
 
-// Repository Settings Types
-export interface RepositorySettings {
-  id: string;
-  repositoryId: string;
-  autoMergeEnabled: boolean;
-  requireApprovals: number;
-  protectedBranches: string[];
-  allowedMergeTypes: string[];
-  branchProtection?: Record<string, unknown>;
-}
-
 // Error Types
 export type GitHubErrorType = 'API' | 'RATE_LIMIT' | 'AUTHENTICATION' | 'NOT_FOUND';
 
@@ -258,60 +442,6 @@ export interface PrismaEvent {
   params?: unknown[];
   duration: number;
   target?: string;
-}
-
-// Webhook Event Types
-export interface WebhookEvent {
-  type: string;
-  action: string;
-  payload: WebhookPayload;
-}
-
-export interface WebhookPayload {
-  action: string;
-  repository: {
-    full_name: string;
-  };
-  pull_request?: {
-    number: number;
-  };
-}
-
-export interface PullRequestWebhookPayload extends WebhookPayload {
-  pull_request: {
-    number: number;
-    title: string;
-    body: string;
-    state: string;
-    created_at: string;
-    updated_at: string;
-    merged_at: string | null;
-    draft: boolean;
-    mergeable: boolean | null;
-    rebaseable: boolean | null;
-    labels: Array<{ name: string }>;
-    user: {
-      login: string;
-      avatar_url: string;
-    };
-  };
-}
-
-export interface ReviewWebhookPayload extends WebhookPayload {
-  pull_request: {
-    number: number;
-  };
-  review: {
-    id: number;
-    user: {
-      login: string;
-      avatar_url: string;
-    };
-    body: string | null;
-    state: 'PENDING' | 'COMMENTED' | 'APPROVED' | 'CHANGES_REQUESTED' | 'DISMISSED';
-    submitted_at: string | null;
-    commit_id: string;
-  };
 }
 
 // Query Event Types
@@ -371,7 +501,6 @@ export interface AnalysisContext {
 
 // Dashboard Stats Types
 export interface DashboardStats {
-  // ... existing stats ...
   database: {
     health: 'HEALTHY' | 'DEGRADED' | 'DOWN';
     performance: {

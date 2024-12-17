@@ -1,6 +1,8 @@
+// Mock PrismaClient first, before any other imports
+jest.mock('@prisma/client');
 import { jest } from '@jest/globals';
+import { Octokit } from '@octokit/rest'; // Import Octokit
 import type { RestEndpointMethodTypes } from '@octokit/plugin-rest-endpoint-methods';
-import { mockRateLimitResponse } from './mocks/responses';
 import type { GitHubErrorMatcher } from './types';
 
 type RateLimitGetResponse = RestEndpointMethodTypes['rateLimit']['get']['response'];
@@ -14,35 +16,34 @@ const mockReposGet = jest.fn<() => Promise<ReposGetResponse>>();
 const mockPullsGet = jest.fn<() => Promise<PullsGetResponse>>();
 const mockPullsListReviews = jest.fn<() => Promise<PullsListReviewsResponse>>();
 
-// Mock PrismaClient
-jest.mock('@prisma/client', () => {
-  const mockPrismaClient = {
-    $connect: jest.fn(),
-    $disconnect: jest.fn(),
-    repository: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn()
-    },
-    pullRequest: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn()
-    },
-    review: {
-      findMany: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn()
-    }
-  };
 
-  return {
-    PrismaClient: jest.fn(() => mockPrismaClient)
-  };
-});
+const mockRateLimitResponse = {
+  data: {
+      rate: {
+        limit: 5000,
+        remaining: 4999,
+        reset: Math.floor(Date.now() / 1000) + 60,
+        used: 1
+      },
+      resources: {
+          core: {
+              limit: 5000,
+              remaining: 4999,
+              reset: Math.floor(Date.now() / 1000) + 60,
+              used: 1
+          },
+          search: {
+              limit: 30,
+              remaining: 30,
+              reset: Math.floor(Date.now() / 1000) + 60,
+              used: 0
+          }
+      },
+  },
+  status: 200,
+  url: 'https://api.github.com/rate_limit',
+  headers: {}
+} as const;
 
 // Mock Octokit
 jest.mock('@octokit/rest', () => {
@@ -119,3 +120,24 @@ expect.extend({
     }
   }
 });
+
+// Add setupOctokitMock function
+export function setupOctokitMock(ctx: { octokit: Octokit }) {
+    
+  const mockOctokit = {
+      rest: {
+          rateLimit: {
+            get: jest.fn<() => Promise<RateLimitGetResponse>>().mockResolvedValue(mockRateLimitResponse)
+          },
+           repos: {
+              get: jest.fn(),
+          },
+          pulls: {
+              get: jest.fn(),
+              listReviews: jest.fn()
+          }
+      }
+  } as unknown as Octokit;
+  
+  ctx.octokit = mockOctokit;
+}
