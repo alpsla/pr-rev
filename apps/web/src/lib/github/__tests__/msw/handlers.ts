@@ -1,7 +1,11 @@
-import { rest } from 'msw';
 import type { Repository, PullRequest, PullRequestReview } from '../../types';
-
+ import { http } from 'msw';
 const GITHUB_API = 'https://api.github.com';
+
+interface PullRequestReviewBody {
+  body?: string;
+  event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT' | 'PENDING';
+}
 
 // Mock repository response
 const mockRepository: Repository = {
@@ -38,11 +42,11 @@ const mockPullRequest: PullRequest = {
   additions: 10,
   deletions: 5,
   draft: false,
+  mergeable_state: 'clean',
   mergeable: true,
   rebaseable: true,
   labels: ['enhancement'],
   mergeableState: 'mergeable',
-  ciStatus: 'success',
   milestone: 'v1.0'
 };
 
@@ -62,91 +66,76 @@ const mockReview: PullRequestReview = {
 };
 
 export const handlers = [
-  // Get repository
-  rest.get(`${GITHUB_API}/repos/:owner/:repo`, (req, res, ctx) => {
-    const { owner, repo } = req.params as { owner: string; repo: string };
+  http.get(`${GITHUB_API}/repos/:owner/:repo`, async ({ request, params }) => {
+    const { owner, repo } = params as { owner: string; repo: string };
     
     // Simulate rate limiting
-    if (req.headers.get('x-test-scenario') === 'rate-limit') {
-      return res(
-        ctx.status(403),
-        ctx.json({
+    const scenario = request.headers.get('x-test-scenario');
+    if (scenario === 'rate-limit') {
+      return Response.json(
+        {
           message: 'API rate limit exceeded',
           documentation_url: 'https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting'
-        })
+        },
+        { status: 403 }
       );
     }
 
     // Simulate not found
     if (repo === 'non-existent-repo') {
-      return res(
-        ctx.status(404),
-        ctx.json({
+      return Response.json(
+        {
           message: 'Not Found',
           documentation_url: 'https://docs.github.com/rest/reference/repos#get-a-repository'
-        })
+        },
+        { status: 404 }
       );
     }
 
     // Success response
-    return res(
-      ctx.status(200),
-      ctx.json({
-        ...mockRepository,
-        name: repo,
-        full_name: `${owner}/${repo}`
-      })
-    );
+    return Response.json({
+      ...mockRepository,
+      name: repo,
+      full_name: `${owner}/${repo}`
+    });
   }),
 
   // Get pull request
-  rest.get(`${GITHUB_API}/repos/:owner/:repo/pulls/:pull_number`, (req, res, ctx) => {
-    const { pull_number } = req.params as { pull_number: string };
+  http.get(`${GITHUB_API}/repos/:owner/:repo/pulls/:pull_number`, async ({ params }) => {
+    const { pull_number } = params as { pull_number: string };
 
-    return res(
-      ctx.status(200),
-      ctx.json({
-        ...mockPullRequest,
-        number: parseInt(pull_number, 10)
-      })
-    );
+    return Response.json({
+      ...mockPullRequest,
+      number: parseInt(pull_number, 10)
+    });
   }),
 
   // List pull request reviews
-  rest.get(`${GITHUB_API}/repos/:owner/:repo/pulls/:pull_number/reviews`, (_req, res, ctx) => {
-    return res(
-      ctx.status(200),
-      ctx.json([mockReview])
-    );
+  http.get(`${GITHUB_API}/repos/:owner/:repo/pulls/:pull_number/reviews`, async () => {
+    return Response.json([mockReview]);
   }),
 
   // Create pull request review
-  rest.post(`${GITHUB_API}/repos/:owner/:repo/pulls/:pull_number/reviews`, async (req, res, ctx) => {
-    const body = await req.json();
+  http.post(`${GITHUB_API}/repos/:owner/:repo/pulls/:pull_number/reviews`, async ({ request }) => {
+    const reviewData = await request.json() as PullRequestReviewBody;
     
-    return res(
-      ctx.status(200),
-      ctx.json({
-        ...mockReview,
-        body: body.body || mockReview.body,
-        state: body.event || mockReview.state
-      })
-    );
+    return Response.json({
+      ...mockReview,
+      body: reviewData?.body ?? mockReview.body,
+      state: reviewData?.event ?? mockReview.state
+    });
   }),
 
   // Handle rate limit check
-  rest.get(`${GITHUB_API}/rate_limit`, (_req, res, ctx) => {
-    return res(
-      ctx.status(200),
-      ctx.json({
-        resources: {
-          core: {
-            limit: 5000,
-            remaining: 4999,
-            reset: Math.floor(Date.now() / 1000) + 3600
-          }
+  http.get(`${GITHUB_API}/rate_limit`, () => {
+    return Response.json({
+      resources: {
+        core: {
+          limit: 5000,
+          remaining: 4999,
+          reset: Math.floor(Date.now() / 1000) + 3600
         }
-      })
-    );
+      }
+    });
   })
 ];

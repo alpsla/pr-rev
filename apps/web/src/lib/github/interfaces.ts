@@ -258,6 +258,9 @@ private isPullRequestReviews(value: unknown): value is PullRequestReview[] {
 
 private async checkRateLimit(): Promise<void> {
   try {
+    if (!this.octokit?.rest?.rateLimit) {
+      throw new GitHubError('GitHub API client not properly initialized', 500);
+    }
     const response = await this.octokit.rest.rateLimit.get();
       
     // Safe access to nested properties

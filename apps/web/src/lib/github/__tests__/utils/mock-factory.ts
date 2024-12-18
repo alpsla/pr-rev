@@ -157,7 +157,7 @@ export const createMockGitHubUser = (overrides: Partial<GitHubWebhookUser> = {})
   id: 1,
   node_id: 'MDQ6VXNlcjE=',
   avatar_url: 'https://github.com/testuser.png',
-  gravatar_id: null,
+  gravatar_id: '',
   url: 'https://api.github.com/users/testuser',
   html_url: 'https://github.com/testuser',
   followers_url: 'https://api.github.com/users/testuser/followers',
