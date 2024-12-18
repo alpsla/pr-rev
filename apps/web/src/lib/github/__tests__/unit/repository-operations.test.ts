@@ -165,7 +165,8 @@ describe('GitHubService - Repository Operations', () => {
           autoMergeEnabled: true,
           requireApprovals: 1,
           protectedBranches: ['main'],
-          allowedMergeTypes: ['merge', 'squash', 'rebase']
+          allowedMergeTypes: ['merge', 'squash', 'rebase'],
+          branchProtection: {} // Add the missing property
         }
       });
     });
@@ -194,7 +195,8 @@ describe('GitHubService - Repository Operations', () => {
           autoMergeEnabled: false,
           requireApprovals: 1,
           protectedBranches: ['main'],
-          allowedMergeTypes: ['merge']
+          allowedMergeTypes: ['merge'],
+          branchProtection: {} // Add the missing property
         }
       });
     });

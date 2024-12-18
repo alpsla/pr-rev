@@ -342,19 +342,24 @@ private async checkRateLimit(): Promise<void> {
       method: this.isOctokitError(error) ? error.request?.method : undefined,
       headers: this.isOctokitError(error) ? error.response?.headers : undefined,
     };
-  
-    // Handle network errors first
-    if (error instanceof Error && (
-      ('code' in error && ['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET'].includes(error.code as string)) ||
-      error.message.toLowerCase().includes('network')
-    )) {
-      throw new NetworkError('Network error occurred', error, errorContext);
+
+    if (error instanceof RateLimitError || 
+      error instanceof NetworkError || 
+      error instanceof ServerError ||
+      error instanceof ValidationError) {
+      throw error; // Re-throw existing error instances
     }
   
+    // Handle network errors first
+    if ('code' in error && typeof error.code === 'string' && 
+      ['ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNRESET'].includes(error.code)) {
+    throw new NetworkError('Network Error', error, errorContext);
+  }
+  
     // Handle Octokit errors with response
-    if (this.isOctokitError(error) && error.response) {
-      const { status } = error.response;
-      const message = error.response.data?.message || error.message;
+    if (this.isOctokitError(error)) {
+      const status = error.response?.status || error.status;
+      const message = error.response?.data?.message || error.message;
   
       // Map status codes to specific errors
       switch (status) {
@@ -375,11 +380,14 @@ private async checkRateLimit(): Promise<void> {
           throw new NotFoundError(message, error, errorContext);
   
         case 422:
-          throw new ValidationError(message, error, {
-            ...errorContext,
-            validationErrors: error.response.data?.errors
-          });
-  
+          throw new ValidationError(
+            message, 
+            error, 
+            {
+              ...errorContext,
+              validationErrors: error.response?.data?.errors ?? undefined
+            }
+          );
         case 409:
           throw new ResourceConflictError(message, error, errorContext);
   

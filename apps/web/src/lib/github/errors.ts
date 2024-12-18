@@ -96,19 +96,17 @@ export class ServerError extends GitHubError {
     originalError?: unknown,
     context?: Record<string, unknown>
   ) {
-    super(
-      message,
-      context?.statusCode as number || 500,
-      originalError,
-      {
-        errorType: 'server',
-        ...(context || {})
-      }
-    );
+    const status = context?.statusCode as number || 500;
+    const errorContext = {
+      errorType: 'server',
+      ...(context || {})
+    };
+    super(message, status, originalError, errorContext);
     this.name = 'ServerError';
     Object.setPrototypeOf(this, ServerError.prototype);
   }
 }
+
 export class ValidationError extends GitHubError {
   constructor(
     message = 'Validation Error',

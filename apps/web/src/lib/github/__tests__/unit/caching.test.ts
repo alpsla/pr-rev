@@ -155,12 +155,13 @@ describe('GitHubService - Caching Behavior', () => {
     it('should handle null values in cached data', async () => {
       // Mock response with null values
       ctx.octokit.rest.repos.get.mockResolvedValueOnce({
-        data: createMockRepositoryResponse(TEST_OWNER, TEST_REPO, {
+        data: {
+          ...createMockRepositoryResponse(TEST_OWNER, TEST_REPO),
           description: null,
           homepage: null,
           license: null,
           mirror_url: null
-        }),
+        },
         status: 200,
         url: `https://api.github.com/repos/${TEST_OWNER}/${TEST_REPO}`,
         headers: {}
@@ -179,14 +180,17 @@ describe('GitHubService - Caching Behavior', () => {
     it('should handle empty string values in cached data', async () => {
       // Mock response with empty strings
       ctx.octokit.rest.repos.get.mockResolvedValueOnce({
-        data: createMockRepositoryResponse(TEST_OWNER, TEST_REPO, {
-          description: '',
-          language: ''
-        }),
-        status: 200,
-        url: `https://api.github.com/repos/${TEST_OWNER}/${TEST_REPO}`,
-        headers: {}
-      });
+    data: {
+      ...createMockRepositoryResponse(TEST_OWNER, TEST_REPO), // Use your existing function
+      description: null,
+      homepage: null,
+      license: null,
+      mirror_url: null
+    },
+    status: 200,
+    url: `https://api.github.com/repos/${TEST_OWNER}/${TEST_REPO}`,
+    headers: {}
+  });
 
       // First request
       const result1 = await service.getRepository(TEST_OWNER, TEST_REPO);
