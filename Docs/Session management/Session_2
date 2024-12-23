@@ -1,0 +1,111 @@
+# Session Management Document - Session #2
+
+# PR Review Application - Project Overview
+
+## Project Description
+An advanced web application that analyzes GitHub Pull Requests and generates comprehensive reports. 
+The application performs dual analysis:
+1. PR-specific changes analysis against the main branch
+2. Whole project analysis including:
+   - Code quality
+   - Performance metrics
+   - Security assessment
+   - Dependency validation
+   - Structure efficiency
+
+## Key Features
+- Language Support:
+  - Multiple coding languages with specific tooling
+  - Multi-language UI interface
+  - Localization system for global users
+
+- AI Integration:
+  - Pluggable LLM agent architecture
+  - Dynamic selection of best-performing AI models
+  - Extensible analysis pipeline
+
+- Export & Integration:
+  - Direct GitHub PR comments
+  - PDF report generation
+  - Markdown download
+  - Clipboard copy
+  - Custom export formats (extensible)
+
+## Technical Stack
+- Frontend: Next.js with TypeScript
+- UI: Tailwind CSS + shadcn/ui
+- Database: PostgreSQL with Prisma ORM
+- Authentication: NextAuth with GitHub OAuth
+- AI Integration: Pluggable LLM System
+- Testing: Jest
+
+## Current Project Status
+- Core infrastructure completed
+- Basic GitHub integration working
+- Authentication and authorization implemented
+- Database schema established
+- UI components library integrated
+- Localization support implemented
+
+## Active Development Focus
+- GitHub service layer reorganization
+- Type system consolidation
+- Service architecture improvement
+
+## Repository Structure
+```typescript
+/src
+├── app/                # Next.js app router
+├── components/         # React components
+├── lib/               # Core business logic
+│   ├── github/        # GitHub integration (current focus)
+│   ├── ai/            # LLM integration
+│   └── export/        # Export services
+└── types/             # TypeScript definitions
+
+
+Current Work Chunk: GitHub Service Reorganization
+Goals
+
+Reorganize GitHub service layer
+Consolidate type system
+Improve service architecture
+
+Scope
+
+/src/lib/github/
+├── services/          # Core service implementations
+├── types/            # Consolidated type definitions
+├── utils/            # Utility functions
+└── constants/        # Configuration and constants
+
+## Project State
+Last Session: Completed types organization
+Current Branch: feature/github-reorg
+
+## Completed in Last Session
+1. Reorganized Analytics Types ✅
+   - Created modular structure
+   - Fixed circular dependencies
+   - Established clear type hierarchy
+
+2. Cleaned up Environment Types ✅
+   - Modernized env.ts approach
+   - Set up Zod validation
+   - Prepared extensible schema
+
+## Next Focus: Utils Organization
+Target Structure:
+```typescript
+/src/lib/github/utils/
+├── cache.ts          // Caching utilities
+├── rate-limiting.ts  // Rate limit handling
+├── error-handling.ts // Error utilities
+└── validation.ts     // Input validation
+
+Session Goals
+
+Review existing utilities
+Plan modular organization
+Implement utility functions
+Add type safety

@@ -1,0 +1,675 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Platform support
+enum PlatformType {
+  GITHUB
+  GITLAB
+  AZURE_DEVOPS
+  BITBUCKET
+}
+
+enum UILanguage {
+  EN // English
+  ES // Spanish
+  FR // French
+  DE // German
+  IT // Italian
+  PT // Portuguese
+  JA // Japanese
+  KO // Korean
+  ZH_CN // Chinese (Simplified)
+  ZH_TW // Chinese (Traditional)
+}
+
+enum AnalysisCategory {
+  CODE_QUALITY
+  DEPENDENCIES
+  PERFORMANCE
+  SECURITY
+  BEST_PRACTICES
+  DOCUMENTATION
+  TESTING
+}
+
+enum ReportType {
+  PR_REVIEW
+  REPO_AUDIT
+}
+
+enum ReportStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PRStatus {
+  OPEN
+  CLOSED
+  MERGED
+  DRAFT
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  COMMENTED
+  DISMISSED
+}
+
+enum AnalysisStatus {
+  QUEUED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model Platform {
+  id           String       @id @default(cuid())
+  type         PlatformType
+  name         String
+  enabled      Boolean      @default(true)
+  config       Json?
+  capabilities Json?
+  repositories Repository[]
+  reports      Report[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Repository {
+  id                 String                  @id @default(cuid())
+  platform           Platform                @relation(fields: [platformId], references: [id])
+  platformId         String
+  name               String
+  fullName           String                  @unique
+  description        String?
+  url                String
+  defaultBranch      String                  @default("main")
+  private            Boolean                 @default(false)
+  languages          ProgrammingLanguage[]
+  pullRequests       PullRequest[]
+  reports            Report[]
+  analysisRuleSets   AnalysisRuleSet[]
+  organization       Organization?           @relation(fields: [orgId], references: [id])
+  orgId              String?
+  analysisHistory    RepositoryAnalysis[]
+  configurations     AnalysisConfiguration[]
+  lastAnalyzedAt     DateTime?
+  settings           Json? // Repository-specific settings
+  webhooks           Json? // Webhook configurations
+  webhook            Webhook[]
+  repositorySettings RepositorySettings?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  @@index([platformId])
+}
+
+model ProgrammingLanguage {
+  id             String        @id @default(cuid())
+  name           String        @unique
+  displayName    String
+  fileExtensions String[]
+  repositories   Repository[]
+  pullRequests   PullRequest[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model PullRequest {
+  id              String                @id @default(cuid())
+  repository      Repository            @relation(fields: [repositoryId], references: [id])
+  repositoryId    String
+  number          Int
+  title           String
+  description     String?
+  status          PRStatus
+  author          User                  @relation("PRAuthor", fields: [authorId], references: [id])
+  authorId        String
+  baseBranch      String
+  headBranch      String
+  isDraft         Boolean               @default(false)
+  isReady         Boolean               @default(true)
+  reviewers       User[]                @relation("PRReviewers")
+  reviews         Review[]
+  comments        PRComment[]
+  analysisResults AnalysisResult[]
+  languages       ProgrammingLanguage[]
+  metadata        Json? // Additional PR metadata
+  files           PRFile[]
+  mergeableState  String? // "mergeable", "conflicting", "unknown"
+  ciStatus        String? // CI/CD status
+  reviewDeadline  DateTime? // Optional review deadline
+  assignees       User[]                @relation("PRAssignees")
+  labels          String[] // PR labels
+  milestone       String? // Milestone name/id
+  settings        Json? // PR-specific settings
+  reports         Report[]              @relation("ReportToPR")
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([repositoryId, number])
+  @@index([authorId])
+  @@index([status])
+}
+
+model PRFile {
+  id            String           @id @default(cuid())
+  pullRequest   PullRequest      @relation(fields: [pullRequestId], references: [id])
+  pullRequestId String
+  path          String
+  additions     Int
+  deletions     Int
+  changes       Int
+  status        String // added, modified, removed, renamed
+  previousPath  String? // for renamed files
+  comments      PRComment[]
+  suggestions   CodeSuggestion[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([pullRequestId])
+}
+
+model Review {
+  id            String       @id @default(cuid())
+  pullRequest   PullRequest  @relation(fields: [pullRequestId], references: [id])
+  pullRequestId String
+  reviewer      User         @relation(fields: [reviewerId], references: [id])
+  reviewerId    String
+  status        ReviewStatus
+  body          String?
+  comments      PRComment[]
+  submittedAt   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([pullRequestId])
+  @@index([reviewerId])
+}
+
+model PRComment {
+  id            String      @id @default(cuid())
+  pullRequest   PullRequest @relation(fields: [pullRequestId], references: [id])
+  pullRequestId String
+  review        Review?     @relation(fields: [reviewId], references: [id])
+  reviewId      String?
+  file          PRFile?     @relation(fields: [fileId], references: [id])
+  fileId        String?
+  author        User        @relation(fields: [authorId], references: [id])
+  authorId      String
+  body          String
+  position      Int? // Line number in the file
+  replyTo       PRComment?  @relation("CommentThread", fields: [replyToId], references: [id])
+  replyToId     String?
+  replies       PRComment[] @relation("CommentThread")
+  resolved      Boolean     @default(false)
+  resolvedBy    User?       @relation("CommentResolver", fields: [resolvedById], references: [id])
+  resolvedById  String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([pullRequestId])
+  @@index([reviewId])
+  @@index([fileId])
+  @@index([authorId])
+}
+
+model AnalysisResult {
+  id            String           @id @default(cuid())
+  pullRequest   PullRequest      @relation(fields: [pullRequestId], references: [id])
+  pullRequestId String
+  status        AnalysisStatus
+  category      AnalysisCategory
+  title         String
+  description   String
+  severity      Int // 1-5, where 5 is most severe
+  suggestions   CodeSuggestion[]
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([pullRequestId])
+  @@index([category])
+}
+
+model CodeSuggestion {
+  id            String         @id @default(cuid())
+  file          PRFile         @relation(fields: [fileId], references: [id])
+  fileId        String
+  analysis      AnalysisResult @relation(fields: [analysisId], references: [id])
+  analysisId    String
+  startLine     Int
+  endLine       Int
+  suggestion    String
+  explanation   String
+  implemented   Boolean        @default(false)
+  implementedAt DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([fileId])
+  @@index([analysisId])
+}
+
+model AnalysisRuleSet {
+  id           String           @id @default(cuid())
+  name         String
+  description  String?
+  category     AnalysisCategory
+  version      String
+  rules        Json
+  repositories Repository[]
+  reports      Report[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model CategoryAnalysis {
+  id              String           @id @default(cuid())
+  report          Report           @relation(fields: [reportId], references: [id])
+  reportId        String
+  category        AnalysisCategory
+  findings        Json
+  score           Float?
+  recommendations Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([reportId])
+}
+
+model Report {
+  id                String             @id @default(cuid())
+  type              ReportType
+  status            ReportStatus       @default(DRAFT)
+  platform          Platform           @relation(fields: [platformId], references: [id])
+  platformId        String
+  repository        Repository         @relation(fields: [repositoryId], references: [id])
+  repositoryId      String
+  pullRequest       PullRequest?       @relation("ReportToPR", fields: [pullRequestId], references: [id])
+  pullRequestId     String?
+  analysisRuleSet   AnalysisRuleSet    @relation(fields: [analysisRuleSetId], references: [id])
+  analysisRuleSetId String
+  analyses          CategoryAnalysis[]
+  summary           String?
+  feedback          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([platformId])
+  @@index([repositoryId])
+  @@index([pullRequestId])
+  @@index([analysisRuleSetId])
+}
+
+model LocaleSettings {
+  id          String     @id @default(cuid())
+  language    UILanguage
+  key         String // Translation key
+  value       String // Translated text
+  category    String? // Optional category for organizing translations
+  description String? // Optional description/context for translators
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([language, key])
+  @@index([language])
+  @@index([key])
+}
+
+model UserSettings {
+  id          String     @id @default(cuid())
+  user        User       @relation("UserToSettings", fields: [userId], references: [id])
+  userId      String     @unique
+  language    UILanguage @default(EN)
+  preferences Json? // Other user preferences
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model UserCategoryPreferences {
+  id          String   @id @default(cuid())
+  user        User     @relation("UserToPreferences", fields: [userId], references: [id])
+  userId      String   @unique
+  preferences Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Core User Model
+model User {
+  id                  String                   @id @default(cuid())
+  email               String                   @unique
+  name                String?
+  avatarUrl           String?
+  settings            UserSettings?            @relation("UserToSettings")
+  categoryPreferences UserCategoryPreferences? @relation("UserToPreferences")
+  authoredPRs         PullRequest[]            @relation("PRAuthor")
+  reviewedPRs         PullRequest[]            @relation("PRReviewers")
+  reviews             Review[]
+  comments            PRComment[]
+  resolvedComments    PRComment[]              @relation("CommentResolver")
+  teamMemberships     TeamMember[]
+  notifications       Notification[]
+  queryMetrics        QueryMetric[]
+  apiMetrics          APIMetric[]
+  cacheMetrics        CacheMetric[]
+  auditLogs           AuditLog[]
+  rateLimits          RateLimit[]
+  assignedPRs         PullRequest[]            @relation("PRAssignees")
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+}
+
+// Organization and Team Structure
+model Organization {
+  id           String       @id @default(cuid())
+  name         String
+  displayName  String?
+  description  String?
+  avatarUrl    String?
+  members      TeamMember[]
+  teams        Team[]
+  repositories Repository[]
+  settings     Json?
+  metadata     Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Team {
+  id           String       @id @default(cuid())
+  name         String
+  displayName  String?
+  description  String?
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+  members      TeamMember[]
+  settings     Json?
+  metadata     Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([orgId, name])
+}
+
+model TeamMember {
+  id           String       @id @default(cuid())
+  user         User         @relation(fields: [userId], references: [id])
+  userId       String
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+  team         Team?        @relation(fields: [teamId], references: [id])
+  teamId       String?
+  role         TeamRole
+  permissions  Json?
+  metadata     Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([userId, orgId])
+  @@index([teamId])
+}
+
+// Notification System
+model Notification {
+  id        String           @id @default(cuid())
+  user      User             @relation(fields: [userId], references: [id])
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  readAt    DateTime?
+  metadata  Json? // Additional context (PR ID, comment ID, etc.)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+// Repository Analysis
+model RepositoryAnalysis {
+  id         String                @id @default(cuid())
+  repository Repository            @relation(fields: [repoId], references: [id])
+  repoId     String
+  category   AnalysisCategory
+  score      Float
+  findings   Json // Detailed analysis results
+  trends     Json? // Historical trends
+  metadata   Json? // Additional analysis context
+  config     AnalysisConfiguration @relation(fields: [configId], references: [id])
+  configId   String
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  @@index([repoId])
+  @@index([category])
+}
+
+model AnalysisConfiguration {
+  id         String               @id @default(cuid())
+  repository Repository           @relation(fields: [repoId], references: [id])
+  repoId     String
+  category   AnalysisCategory
+  rules      Json // Category-specific rules
+  thresholds Json // Alert/warning thresholds
+  enabled    Boolean              @default(true)
+  analyses   RepositoryAnalysis[]
+  metadata   Json?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  @@unique([repoId, category])
+}
+
+// Audit Logging
+model AuditLog {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  action       String // e.g., "CREATE_PR", "MERGE_PR", "UPDATE_SETTINGS"
+  resourceType String // e.g., "PullRequest", "Repository", "Team"
+  resourceId   String
+  details      Json?
+  ipAddress    String?
+  userAgent    String?
+
+  @@index([timestamp])
+  @@index([userId])
+  @@index([resourceType, resourceId])
+}
+
+// Webhook Management
+model Webhook {
+  id           String               @id @default(cuid())
+  repository   Repository           @relation(fields: [repositoryId], references: [id])
+  repositoryId String
+  url          String
+  secret       String?
+  events       String[] // Array of event types
+  active       Boolean              @default(true)
+  lastStatus   Int? // HTTP status of last delivery
+  lastDelivery DateTime?
+  deliveryLogs WebhookDeliveryLog[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([repositoryId])
+}
+
+model WebhookDeliveryLog {
+  id           String   @id @default(cuid())
+  webhook      Webhook  @relation(fields: [webhookId], references: [id])
+  webhookId    String
+  eventType    String
+  payload      Json
+  status       Int
+  responseBody String?
+  duration     Int // ms
+  error        String?
+  createdAt    DateTime @default(now())
+
+  @@index([webhookId])
+  @@index([createdAt])
+}
+
+// Rate Limiting
+model RateLimit {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  resource  String // e.g., "github_api", "analysis_requests"
+  limit     Int
+  remaining Int
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, resource])
+}
+
+// Repository Settings
+model RepositorySettings {
+  id                String     @id @default(cuid())
+  repository        Repository @relation(fields: [repositoryId], references: [id])
+  repositoryId      String     @unique
+  autoMergeEnabled  Boolean    @default(false)
+  requireApprovals  Int        @default(1)
+  protectedBranches String[]
+  allowedMergeTypes String[] // e.g., ["merge", "squash", "rebase"]
+  branchProtection  Json? // Detailed branch protection rules
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+// Additional Enums
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum NotificationType {
+  PR_REVIEW_REQUESTED
+  PR_REVIEWED
+  PR_COMMENTED
+  PR_MERGED
+  ANALYSIS_COMPLETE
+  SYSTEM_ALERT
+}
+
+// Monitoring Models
+model QueryMetric {
+  id           String         @id @default(cuid())
+  timestamp    DateTime       @default(now())
+  userId       String
+  query        String
+  duration     Int // in milliseconds
+  table        String
+  operation    QueryOperation
+  rowCount     Int
+  success      Boolean
+  errorMessage String?
+  params       Json?
+  user         User           @relation(fields: [userId], references: [id])
+
+  @@index([timestamp])
+  @@index([userId])
+  @@index([table])
+}
+
+model APIMetric {
+  id        String       @id @default(cuid())
+  timestamp DateTime     @default(now())
+  userId    String
+  endpoint  String
+  operation String
+  duration  Int
+  status    MetricStatus
+  errorType String?
+  rateLimit Json? // {remaining, reset, limit}
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@index([timestamp])
+  @@index([userId])
+  @@index([endpoint])
+}
+
+model CacheMetric {
+  id        String         @id @default(cuid())
+  timestamp DateTime       @default(now())
+  userId    String
+  operation CacheOperation
+  key       String
+  size      Int
+  duration  Int
+  user      User           @relation(fields: [userId], references: [id])
+
+  @@index([timestamp])
+  @@index([userId])
+}
+
+model SystemMetric {
+  id        String           @id @default(cuid())
+  timestamp DateTime         @default(now())
+  type      SystemMetricType
+  status    MetricStatus
+  message   String?
+  details   Json?
+
+  @@index([timestamp])
+  @@index([type])
+}
+
+model PerformanceSnapshot {
+  id             String   @id @default(cuid())
+  timestamp      DateTime @default(now())
+  databaseSize   BigInt
+  tablesSizes    Json // Record<string, number>
+  indexSizes     Json // Record<string, number>
+  connectionPool Json // {total, active, idle, waiting}
+  queryStats     Json // {avgTime, errorRate, slowQueries}
+
+  @@index([timestamp])
+}
+
+// Enums for Monitoring
+enum QueryOperation {
+  SELECT
+  INSERT
+  UPDATE
+  DELETE
+}
+
+enum CacheOperation {
+  HIT
+  MISS
+  WRITE
+  CLEAR
+}
+
+enum SystemMetricType {
+  GITHUB_API
+  CACHE
+  STORAGE
+  SYSTEM
+}
+
+enum MetricStatus {
+  HEALTHY
+  DEGRADED
+  DOWN
+}
