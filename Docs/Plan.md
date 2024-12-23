@@ -251,3 +251,6 @@ For `transition_plan`:
 - Static page generation where possible
 - Image optimization
 - Bundle size monitoring
+
+
+Plan stack on testing.

@@ -2,6 +2,15 @@ import { jest } from '@jest/globals';
 import type { PrismaMockClient, PullRequest, Repository, ModelOperations } from '../types';
 import type { PrismaEvent } from '../../src/lib/github/types';
 
+// Mock ReviewStatus enum
+export const ReviewStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  CHANGES_REQUESTED: 'CHANGES_REQUESTED',
+  COMMENTED: 'COMMENTED',
+  DISMISSED: 'DISMISSED'
+} as const;
+
 // Type aliases for base functions
 type ConnectFn = PrismaMockClient['$connect'];
 type DisconnectFn = PrismaMockClient['$disconnect'];

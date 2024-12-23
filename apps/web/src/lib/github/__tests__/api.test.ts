@@ -1,35 +1,42 @@
-import { jest } from '@jest/globals';
-import { GitHubService } from '../api';
-import { mockPrismaClient } from './mocks/prisma';
+import { createMockContext, type MockContext } from './mocks/prisma';
 import { Octokit } from '@octokit/rest';
-import { 
-  createOctokitMocks, 
-  createMockResponse, 
-  createRateLimitResponse, 
-  type RepoData 
-} from './mocks/helpers';
+import { GitHubService } from '../api';
 
-describe('GitHubService', () => {
+describe('Enhanced GitHub Service Tests', () => {
   let service: GitHubService;
-  const { mocks } = createOctokitMocks();
+  let ctx: MockContext;
+  let octokitInstance: Octokit;
+  
 
   beforeEach(() => {
+    // Initialize the mock context
+    ctx = createMockContext();
+    
     // Reset all mocks
     jest.clearAllMocks();
 
+    // Create new Octokit instance
+    octokitInstance = new Octokit({ auth: 'test-token' });
+
     // Set up rate limit mock
-    mocks.mockRateLimitGet.mockImplementation(() => Promise.resolve(createMockResponse(createRateLimitResponse())));
+    mocks.mockRateLimitGet.mockImplementation(() => 
+      Promise.resolve(createMockResponse(createRateLimitResponse()))
+    );
     
     service = new GitHubService(
-      // @ts-expect-error - Mock client doesn't implement all PrismaClient methods
-      mockPrismaClient,
-      new Octokit(),
+      ctx.prisma,
+      octokitInstance,
       {
         type: 'token',
         credentials: { token: 'test-token' }
       }
     );
+
+    // Add any additional mock setups
+    mocks.mockReposGet.mockResolvedValue(mockGithubRepoResponse);
+    mocks.mockPullsGet.mockResolvedValue(mockPullsGetResponse);
   });
+
 
   afterEach(async () => {
     await service.destroy();
