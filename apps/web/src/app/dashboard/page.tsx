@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth/auth-config";
+import { authOptions } from "@/lib/auth";
 import { AuthButton } from "@/components/auth/auth-button";
 
 export default async function DashboardPage() {

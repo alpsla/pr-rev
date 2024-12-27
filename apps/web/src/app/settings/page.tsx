@@ -2,18 +2,15 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { ProfileDisplay } from "@/components/profile-display";
 import { useToast } from "@/components/ui/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { signOut, signIn } from "next-auth/react";
 
 export default function SettingsPage() {
   const { data: session, status, update: updateSession } = useSession();
@@ -35,6 +32,44 @@ export default function SettingsPage() {
     };
   } | null>(null);
 
+  const fetchGithubPermissions = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/settings/github-permissions');
+      
+      if (!response.ok) {
+        if (response.status === 401 && !isSaving) {
+          router.push('/auth/signin');
+          return;
+        }
+        throw new Error('Failed to fetch GitHub permissions');
+      }
+
+      const data = await response.json();
+      console.log('GitHub permissions fetched:', data);
+      
+      setGithubStatus(data);
+      setIsPrivateReposEnabled(data.hasPrivateAccess);
+      
+      // Update session if permissions have changed
+      if (session?.user?.hasPrivateAccess !== undefined && data.hasPrivateAccess !== session.user.hasPrivateAccess) {
+        console.log('Permissions changed, updating session');
+        await updateSession();
+      }
+    } catch (error) {
+      console.error('Error fetching GitHub permissions:', error);
+      if (!isSaving) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to fetch GitHub permissions. Please try again.",
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session, isSaving, router, toast, updateSession]);
+
   useEffect(() => {
     if (status === 'loading') return;
     
@@ -45,46 +80,8 @@ export default function SettingsPage() {
       return;
     }
 
-    const fetchGithubPermissions = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch('/api/settings/github-permissions');
-        
-        if (!response.ok) {
-          if (response.status === 401 && !isSaving) {
-            router.push('/auth/signin');
-            return;
-          }
-          throw new Error('Failed to fetch GitHub permissions');
-        }
-
-        const data = await response.json();
-        console.log('GitHub permissions fetched:', data);
-        
-        setGithubStatus(data);
-        setIsPrivateReposEnabled(data.hasPrivateAccess);
-        
-        // Update session if permissions have changed
-        if (data.hasPrivateAccess !== session.user.hasPrivateAccess) {
-          console.log('Permissions changed, updating session');
-          await updateSession();
-        }
-      } catch (error) {
-        console.error('Error fetching GitHub permissions:', error);
-        if (!isSaving) {
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Failed to fetch GitHub permissions. Please try again.",
-          });
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchGithubPermissions();
-  }, [session, status, router, toast, isSaving, updateSession]);
+  }, [session, status, router, isSaving, fetchGithubPermissions]);
 
   // Debug state changes
   useEffect(() => {
@@ -144,32 +141,6 @@ export default function SettingsPage() {
       setIsPrivateReposEnabled(!enabled);
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      // Call the GitHub permissions API to revoke token
-      await fetch('/api/settings/github-permissions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ enablePrivateAccess: false }),
-      });
-
-      // Sign out and redirect to home page
-      await signOut({ 
-        callbackUrl: '/',
-        redirect: true
-      });
-    } catch (error) {
-      console.error('Error signing out:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to sign out properly. Please try again.",
-      });
     }
   };
 

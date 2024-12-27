@@ -1,0 +1,58 @@
+# docs/deployment/SETUP.md
+
+# Deployment Setup Guide
+
+## GitHub Actions Secrets Setup
+
+These secrets need to be configured in your GitHub repository settings under "Settings > Secrets and variables > Actions"
+
+### Common Secrets
+```env
+# Vercel Deployment
+VERCEL_TOKEN=         # Your Vercel deployment token
+VERCEL_ORG_ID=        # Your Vercel organization ID
+VERCEL_PROJECT_ID=    # Your Vercel project ID
+
+Environment-Specific Secrets
+Staging
+STAGING_DATABASE_URL= # Staging database connection string
+STAGING_API_URL=      # Staging API URL
+
+Produciton
+PROD_DATABASE_URL=    # Production database connection string
+PROD_API_URL=         # Production API URL
+SLACK_WEBHOOK=        # Slack notification webhook URL
+
+Testing
+
+TEST_GITHUB_TOKEN=    # GitHub token for running tests
+TEST_OWNER=          # Test repository owner
+TEST_REPO=           # Test repository name
+TEST_DATABASE_URL=   # Test database connection string
+
+Environment Setup Instructions
+
+Vercel Setup
+
+Create Vercel project
+Get deployment tokens
+Configure project settings
+
+
+Database Setup
+
+Configure databases for each environment
+Set up connection strings
+Run initial migrations
+
+
+GitHub Repository Setup
+
+Configure repository secrets
+Set up branch protection rules
+Configure environment protection rules
+
+
+
+Troubleshooting
+[Common issues and solutions will be documented here]

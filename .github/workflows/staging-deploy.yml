@@ -1,0 +1,43 @@
+# .github/workflows/staging-deploy.yml
+name: Staging Deployment
+
+on:
+  push:
+    branches: [ staging ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    
+    env:
+      NODE_ENV: staging
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      NEXT_PUBLIC_API_URL: ${{ secrets.STAGING_API_URL }}
+      
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          cache: 'pnpm'
+          
+      - name: Install dependencies
+        run: pnpm install
+        
+      - name: Build
+        run: pnpm build
+        
+      - name: Run database migrations
+        run: pnpm prisma migrate deploy
+        
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prebuilt --prod'
