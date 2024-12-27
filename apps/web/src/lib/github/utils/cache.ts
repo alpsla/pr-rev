@@ -38,11 +38,11 @@ interface CacheOptions {
     }
   
     private isExpired(timestamp: number): boolean {
-      return Date.now() - timestamp > this.ttl;
+      return Date.now() - timestamp >= this.ttl;
     }
   
     private evictOldest(): void {
-      const oldest = [...this.cache.entries()]
+      const oldest = Array.from(this.cache.entries())
         .sort(([, a], [, b]) => a.timestamp - b.timestamp)[0];
       if (oldest) {
         this.cache.delete(oldest[0]);

@@ -1,64 +1,23 @@
-# PR Rev
+# PR Review
 
-A GitHub Pull Request Review application that helps you review PRs more efficiently.
-
-## GitHub Access Configuration
-
-The application supports two levels of repository access:
-
-### 1. Basic Access (Default)
-- **Scopes**: `read:user`, `user:email`
-- **Capabilities**:
-  - Access to public repositories
-  - Read user profile information
-  - Access user email addresses
-
-### 2. Private Repository Access
-- **Additional Scopes**: `repo`, `read:org`
-- **Additional Capabilities**:
-  - Full access to private repositories
-  - Read organization and team membership
-  - Read organization projects
-
-### Managing Access Levels
-
-Users can toggle between basic and private repository access in the Settings page:
-
-1. Navigate to the Settings page
-2. Find the "Private Repository Access" toggle
-3. Switch the toggle to enable/disable private repository access
-4. The application will automatically sign you out
-5. Sign back in to apply the new permissions
-
-**Note**: When switching from basic to private access, you'll need to authorize the additional GitHub permissions. This is a security measure required by GitHub OAuth.
-
-## Setup
-
-For setup instructions, including how to configure GitHub OAuth credentials, see our [GitHub Setup Guide](Docs/github-setup.md).
-
-## Security
-
-- Access tokens are securely stored in the session
-- Scopes are dynamically requested based on user preferences
-- The application never stores GitHub credentials
-- All authentication is handled through GitHub OAuth
-- Application configuration and secrets are managed securely by the application
+A modern pull request review tool that integrates with GitHub and provides intelligent code review suggestions.
 
 ## Features
 
-- Automated code review using AI
-- Detailed PR analysis and suggestions
-- Modern web dashboard
-- GitHub integration
-- Performance metrics and analytics
+- GitHub Integration
+- Intelligent Code Review
+- Custom Review Rules
+- Multiple Language Support
+- Team Collaboration
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (v18 or later)
-- pnpm (v8 or later)
-- Git
+- Node.js 18+
+- pnpm
+- GitHub Account
+- Supabase Account
 
 ### Installation
 
@@ -75,37 +34,83 @@ pnpm install
 
 3. Set up environment variables:
 ```bash
-cp .env.example .env
+cp apps/web/.env.example apps/web/.env.local
 ```
+
+Fill in your environment variables in `.env.local`.
 
 4. Start the development server:
 ```bash
 pnpm dev
 ```
 
+## Testing
+
+We use Jest for testing and follow a comprehensive testing strategy including unit tests and integration tests.
+
+### Setting Up Test Environment
+
+1. Copy the test environment template:
+```bash
+cp apps/web/.env.test.example apps/web/.env.test
+```
+
+2. Fill in the test environment variables (see [Testing Guide](docs/Testing/guide.md) for details)
+
+### Running Tests
+
+```bash
+# Run all tests
+pnpm test
+
+# Run specific test suite
+pnpm test apps/web/src/lib/github/__tests__
+
+# Run integration tests
+pnpm test apps/web/tests/integration
+```
+
+For detailed testing information, see our [Testing Guide](docs/Testing/guide.md).
+
 ## Project Structure
 
 ```
-pr-reviewer/
-├── apps/
-│   ├── web/          # Frontend application
-│   └── api/          # Backend API service
-├── packages/
-│   ├── ui/           # Shared UI components
-│   ├── core/         # Core business logic
-│   └── config/       # Shared configuration
-├── docs/             # Documentation
-└── tools/            # Development tools & scripts
+apps/
+├── web/                 # Next.js web application
+│   ├── src/
+│   │   ├── app/        # App router pages
+│   │   ├── components/ # React components
+│   │   └── lib/        # Core libraries
+│   └── tests/          # Integration tests
+└── api/                # API service (if needed)
+
+packages/
+├── ui/                 # Shared UI components
+├── config/            # Shared configuration
+└── types/             # Shared TypeScript types
 ```
 
-## Development
+## Development Workflow
 
-- `pnpm dev`: Start development servers
-- `pnpm build`: Build all packages and apps
-- `pnpm test`: Run tests
-- `pnpm lint`: Run linting
-- `pnpm format`: Format code
+1. Create a new branch for your feature:
+```bash
+git checkout -b feature/your-feature-name
+```
+
+2. Make your changes and write tests
+
+3. Run tests and linting:
+```bash
+pnpm test
+pnpm lint
+```
+
+4. Submit a pull request
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and development process.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -1,28 +1,35 @@
-import 'next-auth';
-import { JWT } from 'next-auth/jwt';
+import { DefaultSession, DefaultUser } from "next-auth";
+import { JWT } from "next-auth/jwt";
 
-declare module 'next-auth' {
-  interface Session {
-    accessToken: string;
-    scope: string;
-    user: {
-      email: string;
-      name: string;
-      image?: string;
-      hasPrivateAccess: boolean;
-    };
+declare module "next-auth" {
+  interface Session extends DefaultSession {
+    accessToken?: string;
+    scope?: string;
+    error?: string;
+    user?: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      image?: string | null;
+      hasPrivateAccess?: boolean;
+    } & DefaultSession["user"];
   }
 
-  interface Account {
-    access_token: string;
-    scope: string;
+  interface User extends DefaultUser {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+    hasPrivateAccess?: boolean;
   }
 }
 
-declare module 'next-auth/jwt' {
+declare module "next-auth/jwt" {
   interface JWT {
-    accessToken: string;
-    scope: string;
-    hasPrivateAccess: boolean;
+    accessToken?: string;
+    scope?: string;
+    error?: string;
+    hasPrivateAccess?: boolean;
+    accessTokenExpires?: number;
   }
 }

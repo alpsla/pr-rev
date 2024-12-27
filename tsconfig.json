@@ -1,11 +1,27 @@
 {
   "compilerOptions": {
-    "baseUrl": "./",
+    "composite": true, // Required for project references
+    "declaration": true, // Emit type declaration files
+    "declarationMap": true,
+    "emitDeclarationOnly": true, // Emit only declarations at this level
+    "strict": true, // Enforce strict type checking
+    "baseUrl": ".", // Set the base URL for path mappings
     "paths": {
-      "@app/*": ["src/app/*"],
-      "@lib/*": ["src/lib/*"],
-      "@components/*": ["src/components/*"],
-      "@types/*": ["src/types/*"]
-    }
-  }
+      "@/*": ["src/*"]
+    },
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "target": "ESNext",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": [],
+  "references": [
+    { "path": "./packages/config" },
+    { "path": "./packages/core" },
+    { "path": "./packages/ui" },
+    { "path": "./packages/types" }
+  ]
 }

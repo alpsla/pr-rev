@@ -1,0 +1,104 @@
+# Project Session State
+
+## Current Project Status
+- Total Tests: [number]
+- Passing Tests: [number]
+- Last Successful Run: [date]
+- Branch: [branch_name]
+
+## Active Work
+- Primary Task: [current_task]
+- Files Being Modified:
+  - [file_path_1]
+  - [file_path_2]
+
+## Latest Changes
+[date] - Summary of last changes
+
+## Current Interfaces/Types
+```typescript
+// Copy the latest versions of critical interfaces
+interface CurrentWorkingInterface {
+  // ...
+}
+
+
+// Session Header Template
+/*
+Project State:
+- Current passing tests: 58
+- Active files being modified:
+  - src/tests/mocks/github.ts
+  - src/tests/utils/helpers.ts
+- Last changes: [description]
+*/
+
+# Project Structure
+/src
+  /tests
+    /mocks
+    /utils
+    /unit
+    /integration
+    /contract
+  
+
+
+Known Issues
+
+ Issue 1
+ Issue 2
+
+Next Steps
+
+[next_task]
+[next_task]
+
+2. Claude Session Protocol:
+
+Starting a New Session:
+```markdown
+Hello Claude, I'm working on [project_name]. Here's our current state:
+
+1. Project Context:
+   - This is a [describe project] using TypeScript and Jest
+   - Current test count: [X] passing out of [Y] total
+   - We're working on [specific feature/component]
+
+2. Current Files:
+   [Paste relevant file content]
+
+3. Active Task:
+   We're currently working on [specific task]
+
+4. Previous Session:
+   In our last session we [summary of last changes]
+
+5. Current Issue/Goal:
+   We need to [specific goal for this session]
+
+
+   # Quick commands for session management
+save_session() {
+  git commit -am "Session checkpoint: $1"
+  echo "Session state saved: $1" > last_session.md
+}
+
+restore_session() {
+  git checkout $(cat last_session.md | grep commit | cut -d: -f2)
+}
+
+create_checkpoint() {
+  # Create a named checkpoint
+  git tag checkpoint_$1 $(git rev-parse HEAD)
+}
+
+
+
+Example usage:
+create_checkpoint "mock_setup"                # Creates a tag named "checkpoint_mock_setup" at current commit
+# Create a checkpoint
+create_checkpoint "working_tests"             # Creates "checkpoint_working_tests"
+
+# Later, to go back to this point
+git checkout checkpoint_working_tests         # Returns to that exact code state

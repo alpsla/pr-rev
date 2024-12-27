@@ -1,8 +1,7 @@
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
-
-import { cn } from "@/lib/utils"
+import { cn } from "../../lib/utils"
 
 const Dialog = DialogPrimitive.Root
 
@@ -106,41 +105,6 @@ const DialogDescription = React.forwardRef<
 ))
 DialogDescription.displayName = DialogPrimitive.Description.displayName
 
-const ExampleDialog = () => {
-  const [open, setOpen] = React.useState(false)
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button className="bg-accent py-2 px-4 text-white rounded-sm">
-          Open Dialog
-        </button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Dialog Title</DialogTitle>
-          <DialogDescription>
-            This is a dialog description.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="p-4">
-          <p>
-            This is a dialog content.
-          </p>
-        </div>
-        <DialogFooter>
-          <button
-            className="bg-accent py-2 px-4 text-white rounded-sm"
-            onClick={() => setOpen(false)}
-          >
-            Close
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 export {
   Dialog,
   DialogPortal,
@@ -152,5 +116,4 @@ export {
   DialogFooter,
   DialogTitle,
   DialogDescription,
-  ExampleDialog,
 }
