@@ -1,42 +1,47 @@
-export type GitHubAccountType = 'User' | 'Organization';
+import type { RestEndpointMethodTypes } from '@octokit/rest';
 
-export interface GitHubAccount {
-  login: string;
-  id: number;
-  avatarUrl: string;
-  type: GitHubAccountType;
+export type GitHubRepository = RestEndpointMethodTypes['repos']['get']['response']['data'];
+
+export interface RepositoryMetrics {
+  stars: number;
+  forks: number;
+  issues: number;
+  watchers: number;
+  size: number;
+  updatedAt: string;
+  createdAt: string;
+  lastPushAt: string;
 }
 
-export interface GitHubLicense {
-  key: string;
-  name: string;
-  url: string | null;
-}
-
-export interface GitHubRepository {
-  id: number;
+export interface RepositoryAnalysis {
+  id: string;
   name: string;
   fullName: string;
-  private: boolean;
-  owner: GitHubAccount;
   description: string | null;
-  fork: boolean;
-  createdAt: string;
-  updatedAt: string;
-  pushedAt: string;
-  homepage: string | null;
-  size: number;
-  stargazersCount: number;
-  watchersCount: number;
-  language: string | null;
-  forksCount: number;
+  private: boolean;
+  metrics: RepositoryMetrics;
+  techStack: string[];
+  defaultBranch: string;
+  topics: string[];
+  hasWiki: boolean;
+  hasIssues: boolean;
+  hasProjects: boolean;
+  hasDownloads: boolean;
   archived: boolean;
   disabled: boolean;
-  openIssuesCount: number;
-  license: GitHubLicense | undefined;
-  allowForking: boolean | undefined;
-  isTemplate: boolean | undefined;
-  topics: string[] | undefined;
-  visibility: string | undefined;
-  defaultBranch: string;
+  visibility: string;
+  license: string | null;
+  language: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface RepositoryAnalysisResult {
+  id: string;
+  platformId: string;
+  name: string;
+  analysis: RepositoryAnalysis;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
 }

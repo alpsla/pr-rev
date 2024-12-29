@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,42 +10,53 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Platform support
-enum PlatformType {
-  GITHUB
-  GITLAB
-  AZURE_DEVOPS
-  BITBUCKET
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
 }
 
-// Rest of the enums and models remain the same until User model
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
 
-// Core User Model
 model User {
-  id                  String                   @id @default(cuid())
-  email               String                   @unique
-  name                String?
-  avatarUrl           String?
-  githubScope         String?                  // Added this field
-  hasPrivateAccess    Boolean                 @default(false)
-  lastScopeUpdate     DateTime?
-  settings            UserSettings?            @relation("UserToSettings")
-  categoryPreferences UserCategoryPreferences? @relation("UserToPreferences")
-  authoredPRs         PullRequest[]            @relation("PRAuthor")
-  reviewedPRs         PullRequest[]            @relation("PRReviewers")
-  reviews             Review[]
-  comments            PRComment[]
-  resolvedComments    PRComment[]              @relation("CommentResolver")
-  teamMemberships     TeamMember[]
-  notifications       Notification[]
-  queryMetrics        QueryMetric[]
-  apiMetrics          APIMetric[]
-  cacheMetrics        CacheMetric[]
-  auditLogs           AuditLog[]
-  rateLimits          RateLimit[]
-  assignedPRs         PullRequest[]            @relation("PRAssignees")
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  githubToken   String?   @db.Text
 }
 
-// Rest of your models...
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model KeyValueStore {
+  key   String @id
+  value String @db.Text
+}

@@ -14,6 +14,7 @@
     "test:unit": "jest --config=jest.config.js --testMatch='<rootDir>/src/**/__tests__/**/*.test.[jt]s?(x)'"
   },
   "dependencies": {
+    "@next-auth/prisma-adapter": "^1.0.7",
     "@octokit/rest": "^20.0.2",
     "@prisma/client": "^5.7.1",
     "@radix-ui/react-toast": "^1.2.4",
@@ -26,7 +27,8 @@
     "react": "^18",
     "react-dom": "^18",
     "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@octokit/types": "^13.6.2",
