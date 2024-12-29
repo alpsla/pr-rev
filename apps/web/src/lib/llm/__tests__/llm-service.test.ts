@@ -13,6 +13,22 @@ describe('LLMService', () => {
     });
   });
 
+  const mockContext = {
+    repository: {
+      name: 'test-repo',
+      description: 'Test repository',
+      language: 'TypeScript',
+      techStack: ['TypeScript', 'React', 'Node.js']
+    },
+    pullRequest: {
+      title: 'Test PR',
+      description: 'Test description',
+      author: 'testuser',
+      baseBranch: 'main',
+      targetBranch: 'feature'
+    }
+  };
+
   const mockPRAnalysis: PRAnalysis = {
     id: 123,
     number: 1,
@@ -139,7 +155,7 @@ describe('LLMService', () => {
         })
       });
 
-      const result = await llmService.generatePRReport(mockPRAnalysis);
+      const result = await llmService.generatePRReport(mockPRAnalysis, mockContext);
 
       expect(result).toEqual(mockPRReport);
       expect(global.fetch).toHaveBeenCalledWith(
@@ -158,7 +174,7 @@ describe('LLMService', () => {
     it('should handle API errors', async () => {
       global.fetch = jest.fn().mockRejectedValueOnce(new Error('API rate limit exceeded'));
 
-      await expect(llmService.generatePRReport(mockPRAnalysis))
+      await expect(llmService.generatePRReport(mockPRAnalysis, mockContext))
         .rejects
         .toThrow('API rate limit exceeded');
     });
@@ -170,7 +186,7 @@ describe('LLMService', () => {
         statusText: 'Too Many Requests'
       });
 
-      await expect(llmService.generatePRReport(mockPRAnalysis))
+      await expect(llmService.generatePRReport(mockPRAnalysis, mockContext))
         .rejects
         .toThrow('LLM API error: 429 Too Many Requests');
     });
@@ -183,7 +199,7 @@ describe('LLMService', () => {
         })
       });
 
-      const result = await llmService.generatePRReport(mockPRAnalysis);
+      const result = await llmService.generatePRReport(mockPRAnalysis, mockContext);
 
       // Should return default values when parsing fails
       expect(result).toEqual({
@@ -211,7 +227,7 @@ describe('LLMService', () => {
         })
       });
 
-      const result = await llmService.generateRepositoryReport(mockRepoAnalysis);
+      const result = await llmService.generateRepositoryReport(mockRepoAnalysis, mockContext);
 
       expect(result).toEqual(mockRepoReport);
       expect(global.fetch).toHaveBeenCalledWith(
@@ -230,7 +246,7 @@ describe('LLMService', () => {
     it('should handle API errors', async () => {
       global.fetch = jest.fn().mockRejectedValueOnce(new Error('API rate limit exceeded'));
 
-      await expect(llmService.generateRepositoryReport(mockRepoAnalysis))
+      await expect(llmService.generateRepositoryReport(mockRepoAnalysis, mockContext))
         .rejects
         .toThrow('API rate limit exceeded');
     });
@@ -243,7 +259,7 @@ describe('LLMService', () => {
         })
       });
 
-      const result = await llmService.generateRepositoryReport(mockRepoAnalysis);
+      const result = await llmService.generateRepositoryReport(mockRepoAnalysis, mockContext);
 
       // Should return default values when parsing fails
       expect(result).toEqual({
@@ -271,7 +287,7 @@ describe('LLMService', () => {
         })
       });
 
-      const result = await llmService.analyzePR(mockPRAnalysis);
+      const result = await llmService.analyzePR(mockPRAnalysis, mockContext);
       expect(result).toEqual(mockReport);
     });
 
@@ -289,7 +305,7 @@ describe('LLMService', () => {
         })
       });
 
-      const result = await llmService.analyzeRepository(mockRepoAnalysis);
+      const result = await llmService.analyzeRepository(mockRepoAnalysis, mockContext);
       expect(result).toEqual(mockReport);
     });
   });
