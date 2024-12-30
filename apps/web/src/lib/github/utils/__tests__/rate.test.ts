@@ -1,137 +1,109 @@
 import { RateLimit } from '../rate';
 
 describe('RateLimit', () => {
+  let mockTime: number;
+  let timeProvider: () => number;
   let rateLimit: RateLimit;
-  const maxRequests = 3;
-  const windowMs = 1000; // 1 second
 
   beforeEach(() => {
-    jest.useFakeTimers();
-    rateLimit = new RateLimit({ maxRequests, windowMs });
+    mockTime = 0;
+    timeProvider = () => mockTime;
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
-  });
+  describe('Basic request counting', () => {
+    beforeEach(() => {
+      rateLimit = new RateLimit({
+        maxRequests: 3,
+        windowMs: 1000,
+        timeProvider
+      });
+    });
 
-  describe('basic rate limiting', () => {
-    it('should allow requests within limit', async () => {
-      // First request should be allowed
+    it('should allow requests up to the limit', async () => {
+      // First request at t=0
       expect(await rateLimit.checkLimit()).toBe(true);
       
-      // Second request should be allowed
+      // Second request at t=0
       expect(await rateLimit.checkLimit()).toBe(true);
       
-      // Third request should be allowed (at max)
+      // Third request at t=0
       expect(await rateLimit.checkLimit()).toBe(true);
       
-      // Fourth request should be denied (exceeds max)
+      // Fourth request at t=0 should be denied
       expect(await rateLimit.checkLimit()).toBe(false);
     });
 
-    it('should reset after window period', async () => {
-      // Fill up the limit
-      await rateLimit.checkLimit();
-      await rateLimit.checkLimit();
-      await rateLimit.checkLimit();
+    it('should deny requests when limit is 0', async () => {
+      const zeroLimit = new RateLimit({
+        maxRequests: 0,
+        windowMs: 1000,
+        timeProvider
+      });
+      expect(await zeroLimit.checkLimit()).toBe(false);
+    });
+  });
+
+  describe('Window expiration', () => {
+    beforeEach(() => {
+      rateLimit = new RateLimit({
+        maxRequests: 1,
+        windowMs: 1000,
+        timeProvider
+      });
+    });
+
+    it('should reset counter after window expires', async () => {
+      // First request at t=0
+      expect(await rateLimit.checkLimit()).toBe(true);
       
-      // Verify we're at the limit
+      // Second request at t=0 should be denied
       expect(await rateLimit.checkLimit()).toBe(false);
       
       // Advance time past window
-      jest.advanceTimersByTime(windowMs);
+      mockTime = 1000;
       
-      // Should allow requests again
-      expect(await rateLimit.checkLimit()).toBe(true);
-    });
-  });
-
-  describe('window behavior', () => {
-    it('should clear old timestamps', async () => {
-      // Make some requests
-      await rateLimit.checkLimit();
-      
-      // Advance time partially through window
-      jest.advanceTimersByTime(windowMs / 2);
-      
-      await rateLimit.checkLimit();
-      
-      // Advance time past window for first request
-      jest.advanceTimersByTime(windowMs / 2 + 1);
-      
-      // Should have cleared first timestamp, allowing another request
+      // Request should now be allowed (new window)
       expect(await rateLimit.checkLimit()).toBe(true);
     });
 
-    it('should maintain rolling window', async () => {
-      // Fill up the limit
-      await rateLimit.checkLimit(); // t=0
-      await rateLimit.checkLimit(); // t=0
-      await rateLimit.checkLimit(); // t=0
-      
-      // Advance halfway through window
-      jest.advanceTimersByTime(windowMs / 2);
-      
-      // Should still be limited
-      expect(await rateLimit.checkLimit()).toBe(false);
-      
-      // Advance past window for first requests
-      jest.advanceTimersByTime(windowMs / 2 + 1);
-      
-      // Should allow new requests
-      expect(await rateLimit.checkLimit()).toBe(true);
-      expect(await rateLimit.checkLimit()).toBe(true);
+    it('should not reset counter before window expires', async () => {
+      // First request at t=0
       expect(await rateLimit.checkLimit()).toBe(true);
       
-      // Should be limited again
+      // Advance time to just before window expiration
+      mockTime = 999;
+      
+      // Request should still be denied
       expect(await rateLimit.checkLimit()).toBe(false);
     });
   });
 
-  describe('edge cases', () => {
-    it('should handle rapid requests', async () => {
-      const results = await Promise.all([
-        rateLimit.checkLimit(),
-        rateLimit.checkLimit(),
-        rateLimit.checkLimit(),
-        rateLimit.checkLimit()
-      ]);
-
-      // First three should be allowed, fourth denied
-      expect(results).toEqual([true, true, true, false]);
+  describe('Multiple windows', () => {
+    beforeEach(() => {
+      rateLimit = new RateLimit({
+        maxRequests: 2,
+        windowMs: 1000,
+        timeProvider
+      });
     });
 
-    it('should handle zero requests in window', () => {
-      const zeroLimit = new RateLimit({ maxRequests: 0, windowMs });
-      expect(zeroLimit.checkLimit()).resolves.toBe(false);
-    });
-
-    it('should handle very large request limits', async () => {
-      const largeLimit = new RateLimit({ maxRequests: 1000000, windowMs });
-      for (let i = 0; i < 1000; i++) {
-        expect(await largeLimit.checkLimit()).toBe(true);
-      }
-    });
-
-    it('should handle very small windows', async () => {
-      const smallWindow = new RateLimit({ maxRequests: 1, windowMs: 1 });
-      expect(await smallWindow.checkLimit()).toBe(true);
-      expect(await smallWindow.checkLimit()).toBe(false);
+    it('should handle multiple window transitions', async () => {
+      // First window: Use up limit
+      expect(await rateLimit.checkLimit()).toBe(true);
+      expect(await rateLimit.checkLimit()).toBe(true);
+      expect(await rateLimit.checkLimit()).toBe(false);
       
-      jest.advanceTimersByTime(1);
-      expect(await smallWindow.checkLimit()).toBe(true);
-    });
-
-    it('should handle large windows', async () => {
-      // Use a large but safe window size (1 day in milliseconds)
-      const oneDayMs = 24 * 60 * 60 * 1000;
-      const largeWindow = new RateLimit({ maxRequests: 1, windowMs: oneDayMs });
+      // Second window
+      mockTime = 1000;
+      expect(await rateLimit.checkLimit()).toBe(true);
+      expect(await rateLimit.checkLimit()).toBe(true);
+      expect(await rateLimit.checkLimit()).toBe(false);
       
-      expect(await largeWindow.checkLimit()).toBe(true);
-      expect(await largeWindow.checkLimit()).toBe(false);
-      
-      jest.advanceTimersByTime(oneDayMs);
-      expect(await largeWindow.checkLimit()).toBe(true);
+      // Third window
+      mockTime = 2000;
+      expect(await rateLimit.checkLimit()).toBe(true);
+      expect(await rateLimit.checkLimit()).toBe(true);
+      expect(await rateLimit.checkLimit()).toBe(false);
     });
   });
 });

@@ -1,29 +1,23 @@
 import { Cache } from '../../utils/cache';
 
 describe('Cache', () => {
-  // Mock Date.now() to control time
-  const mockNow = jest.spyOn(Date, 'now');
-  const baseTime = 1000000000000; // Some fixed timestamp
+  let mockTime: number;
+  let timeProvider: () => number;
 
   beforeEach(() => {
-    // Reset Date.now mock before each test
-    mockNow.mockReset();
-    mockNow.mockImplementation(() => baseTime);
-  });
-
-  afterAll(() => {
-    mockNow.mockRestore();
+    mockTime = 1000000000000; // Some fixed timestamp
+    timeProvider = () => mockTime;
   });
 
   describe('basic operations', () => {
     it('should store and retrieve values', () => {
-      const cache = new Cache<string>({ ttl: 1000 });
+      const cache = new Cache<string>({ ttl: 1000, timeProvider });
       cache.set('key1', 'value1');
       expect(cache.get('key1')).toBe('value1');
     });
 
     it('should return null for non-existent keys', () => {
-      const cache = new Cache<string>({ ttl: 1000 });
+      const cache = new Cache<string>({ ttl: 1000, timeProvider });
       expect(cache.get('nonexistent')).toBeNull();
     });
 
@@ -35,7 +29,7 @@ describe('Cache', () => {
         object: { foo: string };
         array: number[];
       }
-      const cache = new Cache<TestTypes[keyof TestTypes]>({ ttl: 1000 });
+      const cache = new Cache<TestTypes[keyof TestTypes]>({ ttl: 1000, timeProvider });
       
       // Test various types
       cache.set('string', 'test');
@@ -54,28 +48,28 @@ describe('Cache', () => {
 
   describe('TTL behavior', () => {
     it('should expire items after TTL', () => {
-      const cache = new Cache<string>({ ttl: 1000 }); // 1 second TTL
+      const cache = new Cache<string>({ ttl: 1000, timeProvider }); // 1 second TTL
       cache.set('key1', 'value1');
 
       // Before expiration
       expect(cache.get('key1')).toBe('value1');
 
       // After expiration
-      mockNow.mockImplementation(() => baseTime + 1001);
+      mockTime += 1001;
       expect(cache.get('key1')).toBeNull();
     });
 
     it('should not expire items before TTL', () => {
-      const cache = new Cache<string>({ ttl: 1000 });
+      const cache = new Cache<string>({ ttl: 1000, timeProvider });
       cache.set('key1', 'value1');
 
       // Just before expiration
-      mockNow.mockImplementation(() => baseTime + 999);
+      mockTime += 999;
       expect(cache.get('key1')).toBe('value1');
     });
 
     it('should handle zero TTL', () => {
-      const cache = new Cache<string>({ ttl: 0 });
+      const cache = new Cache<string>({ ttl: 0, timeProvider });
       cache.set('key1', 'value1');
 
       // Should expire immediately
@@ -85,7 +79,7 @@ describe('Cache', () => {
 
   describe('size limits', () => {
     it('should respect maxSize limit', () => {
-      const cache = new Cache<string>({ ttl: 1000, maxSize: 2 });
+      const cache = new Cache<string>({ ttl: 1000, maxSize: 2, timeProvider });
       
       cache.set('key1', 'value1');
       cache.set('key2', 'value2');
@@ -97,16 +91,15 @@ describe('Cache', () => {
     });
 
     it('should evict oldest items first', () => {
-      const cache = new Cache<string>({ ttl: 1000, maxSize: 2 });
+      const cache = new Cache<string>({ ttl: 1000, maxSize: 2, timeProvider });
 
       // Add items at different times
-      mockNow.mockImplementation(() => baseTime);
       cache.set('key1', 'value1');
 
-      mockNow.mockImplementation(() => baseTime + 100);
+      mockTime += 100;
       cache.set('key2', 'value2');
 
-      mockNow.mockImplementation(() => baseTime + 200);
+      mockTime += 100;
       cache.set('key3', 'value3');
 
       expect(cache.get('key1')).toBeNull(); // Should be evicted (oldest)
@@ -115,7 +108,7 @@ describe('Cache', () => {
     });
 
     it('should handle maxSize of 1', () => {
-      const cache = new Cache<string>({ ttl: 1000, maxSize: 1 });
+      const cache = new Cache<string>({ ttl: 1000, maxSize: 1, timeProvider });
       
       cache.set('key1', 'value1');
       cache.set('key2', 'value2');
@@ -125,7 +118,7 @@ describe('Cache', () => {
     });
 
     it('should use default maxSize if not specified', () => {
-      const cache = new Cache<string>({ ttl: 1000 });
+      const cache = new Cache<string>({ ttl: 1000, timeProvider });
       
       // Add many items (but less than default maxSize)
       for (let i = 0; i < 100; i++) {
@@ -141,7 +134,7 @@ describe('Cache', () => {
 
   describe('edge cases', () => {
     it('should handle updating existing keys', () => {
-      const cache = new Cache<string>({ ttl: 1000 });
+      const cache = new Cache<string>({ ttl: 1000, timeProvider });
       
       cache.set('key1', 'value1');
       cache.set('key1', 'value2');
@@ -154,7 +147,7 @@ describe('Cache', () => {
         undefined: undefined;
         null: null;
       }
-      const cache = new Cache<NullableTypes[keyof NullableTypes]>({ ttl: 1000 });
+      const cache = new Cache<NullableTypes[keyof NullableTypes]>({ ttl: 1000, timeProvider });
       
       cache.set('undefined', undefined);
       cache.set('null', null);
@@ -164,7 +157,7 @@ describe('Cache', () => {
     });
 
     it('should handle empty string keys', () => {
-      const cache = new Cache<string>({ ttl: 1000 });
+      const cache = new Cache<string>({ ttl: 1000, timeProvider });
       
       cache.set('', 'empty');
       expect(cache.get('')).toBe('empty');

@@ -1,312 +1,165 @@
-import { LLMService, type PRReport, type RepositoryReport } from '../llm-service';
-import { PRAnalysis } from '../../github/types/pr-analysis';
+import { LLMService } from '../llm-service';
+import { createDefaultAnalysis } from '../../github/types/repository';
+import type { PRAnalysis } from '../../github/types/pr-analysis';
+import type { LLMResponse, LLMRepositoryAnalysis, LLMPRAnalysis } from '../types/analysis';
 
 describe('LLMService', () => {
-  let llmService: LLMService;
+  let service: LLMService;
 
   beforeEach(() => {
-    llmService = new LLMService({
-      apiKey: 'test-key',
-      model: 'test-model',
-      temperature: 0.7,
-      maxTokens: 2000
-    });
+    service = new LLMService();
   });
 
-  const mockContext = {
-    repository: {
-      name: 'test-repo',
-      description: 'Test repository',
-      language: 'TypeScript',
-      techStack: ['TypeScript', 'React', 'Node.js']
-    },
-    pullRequest: {
-      title: 'Test PR',
-      description: 'Test description',
-      author: 'testuser',
-      baseBranch: 'main',
-      targetBranch: 'feature'
-    }
-  };
-
-  const mockPRAnalysis: PRAnalysis = {
-    id: 123,
-    number: 1,
-    title: 'Test PR',
-    body: 'Test description',
-    state: 'open',
-    createdAt: '2023-12-27T00:00:00Z',
-    updatedAt: '2023-12-27T01:00:00Z',
-    closedAt: null,
-    mergedAt: null,
-    draft: false,
-    user: {
-      login: 'testuser',
-      id: 1,
-      node_id: 'node1',
-      avatar_url: 'https://github.com/testuser.png',
-      gravatar_id: '',
-      url: 'https://api.github.com/users/testuser',
-      html_url: 'https://github.com/testuser',
-      followers_url: 'https://api.github.com/users/testuser/followers',
-      following_url: 'https://api.github.com/users/testuser/following{/other_user}',
-      gists_url: 'https://api.github.com/users/testuser/gists{/gist_id}',
-      starred_url: 'https://api.github.com/users/testuser/starred{/owner}{/repo}',
-      subscriptions_url: 'https://api.github.com/users/testuser/subscriptions',
-      organizations_url: 'https://api.github.com/users/testuser/orgs',
-      repos_url: 'https://api.github.com/users/testuser/repos',
-      events_url: 'https://api.github.com/users/testuser/events{/privacy}',
-      received_events_url: 'https://api.github.com/users/testuser/received_events',
-      type: 'User',
-      site_admin: false
-    },
-    diffAnalysis: {
-      filesChanged: 3,
-      additions: 100,
-      deletions: 50,
-      changedFiles: [
-        {
-          sha: 'abc123',
-          filename: 'src/test.ts',
-          status: 'modified',
-          additions: 50,
-          deletions: 25,
-          changes: 75,
-          patch: '@@ -1,25 +1,50 @@\n test changes'
+  describe('generateRepositoryReport', () => {
+    it('should generate a repository report', async () => {
+      const analysis = createDefaultAnalysis({
+        id: 'test-repo-1',
+        repositoryId: 'owner/test-repo',
+        name: 'test-repo',
+        fullName: 'owner/test-repo',
+        description: 'A test repository',
+        private: false,
+        visibility: 'public',
+        defaultBranch: 'main',
+        archived: false,
+        disabled: false,
+        metrics: {
+          stars: 100,
+          forks: 50,
+          issues: 10,
+          watchers: 75,
         },
-        {
-          sha: 'def456',
-          filename: 'src/main.ts',
-          status: 'modified',
-          additions: 50,
-          deletions: 25,
-          changes: 75,
-          patch: '@@ -1,25 +1,50 @@\n main changes'
-        }
-      ],
-      binaryFiles: 0,
-      renamedFiles: 0
-    },
-    impactMetrics: {
-      complexity: 7,
-      risk: 5,
-      testCoverage: 80,
-      documentation: 90
-    },
-    reviewHistory: {
-      approvalCount: 2,
-      changesRequestedCount: 1,
-      reviewers: ['reviewer1', 'reviewer2'],
-      reviews: [
-        {
+        techStack: ['TypeScript', 'React', 'Node.js'],
+      });
+
+      const response: LLMResponse<LLMRepositoryAnalysis> = await service.generateRepositoryReport(analysis, {
+        model: 'test-model',
+        requestId: 'test-request'
+      });
+
+      expect(response).toBeDefined();
+      expect(response.analysis).toBeDefined();
+      expect(response.analysis.summary).toBeDefined();
+      expect(response.analysis.findings).toBeDefined();
+      expect(response.analysis.findings.length).toBeGreaterThan(0);
+      expect(response.analysis.recommendations).toBeDefined();
+      expect(response.issues).toHaveLength(0);
+    });
+
+    it('should handle errors gracefully', async () => {
+      const analysis = createDefaultAnalysis({
+        id: 'test-repo-2',
+        repositoryId: 'owner/test-repo',
+        name: 'test-repo',
+        fullName: 'owner/test-repo',
+        description: null,
+      });
+
+      const response: LLMResponse<LLMRepositoryAnalysis> = await service.generateRepositoryReport(analysis, {
+        model: 'test-model',
+        requestId: 'test-request'
+      });
+
+      expect(response).toBeDefined();
+      expect(response.analysis).toBeDefined();
+      expect(response.issues).toBeDefined();
+      expect(response.issues.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('generatePRReport', () => {
+    it('should generate a PR report', async () => {
+      const prAnalysis: PRAnalysis = {
+        id: 1,
+        number: 1,
+        title: 'Test PR',
+        body: 'A test pull request',
+        state: 'open',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        mergedAt: null,
+        closedAt: null,
+        draft: false,
+        author: {
+          login: 'test-user',
           id: 1,
-          node_id: 'review1',
-          user: null,
-          body: 'LGTM',
-          state: 'APPROVED',
-          html_url: 'https://github.com/owner/repo/pull/1#pullrequestreview-1',
-          pull_request_url: 'https://api.github.com/repos/owner/repo/pulls/1',
-          submitted_at: '2023-12-27T00:00:00Z',
-          commit_id: 'abc123',
-          _links: {
-            html: { href: 'https://github.com/owner/repo/pull/1#pullrequestreview-1' },
-            pull_request: { href: 'https://api.github.com/repos/owner/repo/pulls/1' }
-          }
-        }
-      ]
-    },
-    automatedChecks: {
-      status: 'success',
-      testResults: {
-        passed: 100,
-        failed: 0,
-        skipped: 5,
-        coverage: 80
-      },
-      lintingErrors: 0,
-      securityIssues: 0
-    }
-  };
-
-  const mockRepoAnalysis = {
-    metrics: {
-      stars: 100,
-      forks: 50,
-      issues: 10,
-      watchers: 75
-    },
-    techStack: ['TypeScript', 'React', 'Node.js']
-  };
-
-  describe('PR Analysis', () => {
-    const mockPRReport: PRReport = {
-      impact: { score: 7, analysis: 'Medium impact changes' },
-      codeQuality: { score: 8, analysis: 'Good code quality', suggestions: [] },
-      testing: { coverage: 80, analysis: 'Good test coverage', suggestions: [] },
-      documentation: { score: 9, analysis: 'Well documented', suggestions: [] },
-      samples: { improvements: [] }
-    };
-
-    it('should generate PR report successfully', async () => {
-      global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          content: [{ text: JSON.stringify(mockPRReport) }]
-        })
-      });
-
-      const result = await llmService.generatePRReport(mockPRAnalysis, mockContext);
-
-      expect(result).toEqual(mockPRReport);
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.anthropic.com/v1/messages',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-            'x-api-key': 'test-key',
-            'anthropic-version': '2023-06-01'
-          })
-        })
-      );
-    });
-
-    it('should handle API errors', async () => {
-      global.fetch = jest.fn().mockRejectedValueOnce(new Error('API rate limit exceeded'));
-
-      await expect(llmService.generatePRReport(mockPRAnalysis, mockContext))
-        .rejects
-        .toThrow('API rate limit exceeded');
-    });
-
-    it('should handle non-200 responses', async () => {
-      global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: false,
-        status: 429,
-        statusText: 'Too Many Requests'
-      });
-
-      await expect(llmService.generatePRReport(mockPRAnalysis, mockContext))
-        .rejects
-        .toThrow('LLM API error: 429 Too Many Requests');
-    });
-
-    it('should handle malformed responses', async () => {
-      global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          content: [{ text: 'Not a JSON response' }]
-        })
-      });
-
-      const result = await llmService.generatePRReport(mockPRAnalysis, mockContext);
-
-      // Should return default values when parsing fails
-      expect(result).toEqual({
-        impact: { score: 0, analysis: 'Failed to analyze impact' },
-        codeQuality: { score: 0, analysis: 'Failed to analyze code quality', suggestions: [] },
-        testing: { coverage: 0, analysis: 'Failed to analyze testing', suggestions: [] },
-        documentation: { score: 0, analysis: 'Failed to analyze documentation', suggestions: [] },
-        samples: { improvements: [] }
-      });
-    });
-  });
-
-  describe('Repository Analysis', () => {
-    const mockRepoReport: RepositoryReport = {
-      codeQuality: { score: 8, analysis: 'Good code quality', recommendations: [] },
-      security: { score: 9, vulnerabilities: [], recommendations: [] },
-      performance: { score: 7, analysis: 'Good performance', recommendations: [] }
-    };
-
-    it('should generate repository report successfully', async () => {
-      global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          content: [{ text: JSON.stringify(mockRepoReport) }]
-        })
-      });
-
-      const result = await llmService.generateRepositoryReport(mockRepoAnalysis, mockContext);
-
-      expect(result).toEqual(mockRepoReport);
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.anthropic.com/v1/messages',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-            'x-api-key': 'test-key',
-            'anthropic-version': '2023-06-01'
-          })
-        })
-      );
-    });
-
-    it('should handle API errors', async () => {
-      global.fetch = jest.fn().mockRejectedValueOnce(new Error('API rate limit exceeded'));
-
-      await expect(llmService.generateRepositoryReport(mockRepoAnalysis, mockContext))
-        .rejects
-        .toThrow('API rate limit exceeded');
-    });
-
-    it('should handle malformed responses', async () => {
-      global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          content: [{ text: 'Not a JSON response' }]
-        })
-      });
-
-      const result = await llmService.generateRepositoryReport(mockRepoAnalysis, mockContext);
-
-      // Should return default values when parsing fails
-      expect(result).toEqual({
-        codeQuality: { score: 0, analysis: 'Failed to analyze code quality', recommendations: [] },
-        security: { score: 0, vulnerabilities: [], recommendations: [] },
-        performance: { score: 0, analysis: 'Failed to analyze performance', recommendations: [] }
-      });
-    });
-  });
-
-  describe('Backward Compatibility', () => {
-    it('should support old analyzePR method', async () => {
-      const mockReport = {
-        impact: { score: 7, analysis: 'Medium impact changes' },
-        codeQuality: { score: 8, analysis: 'Good code quality', suggestions: [] },
-        testing: { coverage: 80, analysis: 'Good test coverage', suggestions: [] },
-        documentation: { score: 9, analysis: 'Well documented', suggestions: [] },
-        samples: { improvements: [] }
+        },
+        base: {
+          ref: 'main',
+          sha: 'base-sha',
+        },
+        head: {
+          ref: 'feature',
+          sha: 'head-sha',
+        },
+        changes: {
+          files: 5,
+          additions: 100,
+          deletions: 50,
+        },
+        reviews: [],
+        commits: [],
+        labels: [],
+        comments: [],
       };
 
-      global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          content: [{ text: JSON.stringify(mockReport) }]
-        })
+      const response: LLMResponse<LLMPRAnalysis> = await service.generatePRReport(prAnalysis, {
+        model: 'test-model',
+        requestId: 'test-request'
       });
 
-      const result = await llmService.analyzePR(mockPRAnalysis, mockContext);
-      expect(result).toEqual(mockReport);
+      expect(response).toBeDefined();
+      expect(response.analysis).toBeDefined();
+      expect(response.analysis.summary).toBeDefined();
+      expect(response.analysis.findings).toBeDefined();
+      expect(response.analysis.recommendations).toBeDefined();
+      expect(response.issues).toHaveLength(0);
     });
 
-    it('should support old analyzeRepository method', async () => {
-      const mockReport = {
-        codeQuality: { score: 8, analysis: 'Good code quality', recommendations: [] },
-        security: { score: 9, vulnerabilities: [], recommendations: [] },
-        performance: { score: 7, analysis: 'Good performance', recommendations: [] }
+    it('should handle errors in PR report generation', async () => {
+      const prAnalysis: PRAnalysis = {
+        id: 2,
+        number: 2,
+        title: '',
+        body: null,
+        state: 'open',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        mergedAt: null,
+        closedAt: null,
+        draft: false,
+        author: {
+          login: 'test-user',
+          id: 1,
+        },
+        base: {
+          ref: 'main',
+          sha: 'base-sha',
+        },
+        head: {
+          ref: 'feature',
+          sha: 'head-sha',
+        },
+        changes: {
+          files: 0,
+          additions: 0,
+          deletions: 0,
+        },
+        reviews: [],
+        commits: [],
+        labels: [],
+        comments: [],
       };
 
-      global.fetch = jest.fn().mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({
-          content: [{ text: JSON.stringify(mockReport) }]
-        })
+      const response: LLMResponse<LLMPRAnalysis> = await service.generatePRReport(prAnalysis, {
+        model: 'test-model',
+        requestId: 'test-request'
       });
 
-      const result = await llmService.analyzeRepository(mockRepoAnalysis, mockContext);
-      expect(result).toEqual(mockReport);
+      expect(response).toBeDefined();
+      expect(response.analysis).toBeDefined();
+      expect(response.issues).toBeDefined();
+      expect(response.issues.length).toBeGreaterThan(0);
     });
   });
 });

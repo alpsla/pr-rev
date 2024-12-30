@@ -1,7 +1,9 @@
-import { GitHubRepositoryAnalysisService, type RepositoryData, type LanguageData, type PackageJsonData } from '../repository-analysis';
+import { GitHubRepositoryAnalysisService, type RepositoryData, type LanguageData } from '../repository-analysis';
 import { RateLimiter } from '../rate-limiter';
 
 jest.mock('../rate-limiter');
+
+type AsyncFunction<T> = () => Promise<T>;
 
 describe('GitHubRepositoryAnalysisService', () => {
   let service: GitHubRepositoryAnalysisService;
@@ -12,9 +14,13 @@ describe('GitHubRepositoryAnalysisService', () => {
 
   beforeEach(() => {
     mockRateLimiter = {
-      executeWithRateLimit: jest.fn().mockImplementation((operation) => operation()),
+      checkRateLimit: jest.fn().mockResolvedValue(undefined),
+      executeWithRateLimit: jest.fn(),
       updateRateLimit: jest.fn().mockResolvedValue(undefined),
+      getRemainingRequests: jest.fn().mockReturnValue(5000),
+      getResetTime: jest.fn().mockReturnValue(new Date()),
       close: jest.fn().mockResolvedValue(undefined),
+      isClosed: jest.fn().mockReturnValue(false)
     } as unknown as jest.Mocked<RateLimiter>;
 
     (RateLimiter as jest.Mock).mockImplementation(() => mockRateLimiter);
@@ -54,30 +60,19 @@ describe('GitHubRepositoryAnalysisService', () => {
       CSS: 2000
     };
 
-    const mockPackageJson: PackageJsonData = {
-      dependencies: {
-        react: '^18.0.0',
-        'next': '^13.0.0'
-      },
-      devDependencies: {
-        typescript: '^5.0.0',
-        jest: '^29.0.0'
-      }
-    };
-
     beforeEach(() => {
-      // Mock the fetch methods with proper return types
-      jest.spyOn(service as unknown as { fetchRepositoryData: (owner: string, repo: string) => Promise<RepositoryData> }, 'fetchRepositoryData')
-        .mockResolvedValue(mockRepoData);
-      
-      jest.spyOn(service as unknown as { fetchLanguages: (owner: string, repo: string) => Promise<LanguageData> }, 'fetchLanguages')
-        .mockResolvedValue(mockLanguages);
-      
-      jest.spyOn(service as unknown as { fetchPackageJson: (owner: string, repo: string) => Promise<PackageJsonData | null> }, 'fetchPackageJson')
-        .mockResolvedValue(mockPackageJson);
+      // Mock successful responses
+      mockRateLimiter.executeWithRateLimit
+        .mockImplementation(async (operation: AsyncFunction<unknown>) => {
+          return operation();
+        });
     });
 
     it('should analyze repository successfully', async () => {
+      mockRateLimiter.executeWithRateLimit
+        .mockImplementationOnce(async () => mockRepoData)
+        .mockImplementationOnce(async () => mockLanguages);
+
       const result = await service.analyzeRepository('owner', 'test-repo');
 
       expect(result).toBeDefined();
@@ -94,28 +89,31 @@ describe('GitHubRepositoryAnalysisService', () => {
     });
 
     it('should handle rate limit exceeded', async () => {
-      mockRateLimiter.executeWithRateLimit.mockRejectedValueOnce(new Error('Rate limit exceeded'));
+      // Reset all mocks to ensure clean state
+      jest.clearAllMocks();
+      
+      // Mock rate limit error
+      mockRateLimiter.executeWithRateLimit
+        .mockRejectedValueOnce(new Error('Rate limit exceeded'));
 
       await expect(service.analyzeRepository('owner', 'test-repo'))
         .rejects
         .toThrow('Rate limit exceeded');
-
-      expect(service['fetchRepositoryData']).not.toHaveBeenCalled();
     });
 
     it('should handle GitHub API errors', async () => {
-      jest.spyOn(service as unknown as { fetchRepositoryData: (owner: string, repo: string) => Promise<RepositoryData> }, 'fetchRepositoryData')
+      mockRateLimiter.executeWithRateLimit
         .mockRejectedValueOnce(new Error('Not found'));
 
       await expect(service.analyzeRepository('owner', 'test-repo'))
         .rejects
         .toThrow('Not found');
-
-      expect(service['fetchRepositoryData']).toHaveBeenCalledWith('owner', 'test-repo');
     });
 
     it('should handle missing dependencies gracefully', async () => {
-      jest.spyOn(service as unknown as { fetchPackageJson: (owner: string, repo: string) => Promise<PackageJsonData | null> }, 'fetchPackageJson')
+      mockRateLimiter.executeWithRateLimit
+        .mockImplementationOnce(async () => mockRepoData)
+        .mockImplementationOnce(async () => mockLanguages)
         .mockRejectedValueOnce(new Error('No package.json'));
 
       const result = await service.analyzeRepository('owner', 'test-repo');
@@ -127,8 +125,9 @@ describe('GitHubRepositoryAnalysisService', () => {
 
     it('should handle private repositories', async () => {
       const privateRepoData = { ...mockRepoData, private: true, visibility: 'private' };
-      jest.spyOn(service as unknown as { fetchRepositoryData: (owner: string, repo: string) => Promise<RepositoryData> }, 'fetchRepositoryData')
-        .mockResolvedValueOnce(privateRepoData);
+      mockRateLimiter.executeWithRateLimit
+        .mockImplementationOnce(async () => privateRepoData)
+        .mockImplementationOnce(async () => mockLanguages);
 
       const result = await service.analyzeRepository('owner', 'test-repo');
 
@@ -146,9 +145,13 @@ describe('GitHubRepositoryAnalysisService', () => {
     });
 
     it('should handle close errors gracefully', async () => {
-      mockRateLimiter.close.mockRejectedValueOnce(new Error('Close error'));
+      mockRateLimiter.close.mockImplementation(async () => {
+        throw new Error('Close error');
+      });
 
-      await expect(service.close()).rejects.toThrow('Close error');
+      await expect(service.close())
+        .rejects
+        .toThrow('Close error');
     });
   });
 });

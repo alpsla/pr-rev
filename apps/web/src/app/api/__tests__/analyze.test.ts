@@ -1,11 +1,11 @@
 import { POST } from '../analyze/route';
-import { getServerSession } from 'next-auth';
+import * as nextAuth from 'next-auth';
 import { AnalysisPipeline } from '../../../lib/github/services/analysis-pipeline';
 import type { AnalyzeRequest } from '../analyze/route';
 
 // Mock next-auth
 jest.mock('next-auth');
-const mockGetServerSession = getServerSession as jest.MockedFunction<typeof getServerSession>;
+const mockGetServerSession = jest.spyOn(nextAuth, 'getServerSession') as jest.MockedFunction<typeof nextAuth.getServerSession>;
 
 // Mock services
 jest.mock('../../../lib/github/services/analysis-pipeline');

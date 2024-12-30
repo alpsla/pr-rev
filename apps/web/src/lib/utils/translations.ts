@@ -1,14 +1,32 @@
-import { prisma } from '@/prisma'
-import { UILanguage } from '@prisma/client'
+import { useState, useEffect } from 'react'
+import { prisma } from '../prisma';
+import type { PrismaClient } from '@prisma/client';
+
+type UILanguage = 'EN' | 'ES'
 
 export type TranslationKey = 'common.submit' | 'common.cancel' | 'pr_review.analyze'
 
-class TranslationManager {
-  private static instance: TranslationManager
+interface LocaleSettings {
+  key: string;
+  value: string;
+  language: UILanguage;
+}
+
+interface PrismaClientWithLocale extends PrismaClient {
+  localeSettings: {
+    findMany: (args: { where: { language: UILanguage } }) => Promise<LocaleSettings[]>;
+  }
+}
+
+export class TranslationManager {
+  private static instance: TranslationManager | null = null;
   private translations: Map<string, string> = new Map()
   private currentLanguage: UILanguage = 'EN'
+  private prismaClient: PrismaClientWithLocale
 
-  private constructor() {}
+  private constructor() {
+    this.prismaClient = prisma as PrismaClientWithLocale;
+  }
 
   static getInstance(): TranslationManager {
     if (!TranslationManager.instance) {
@@ -17,8 +35,17 @@ class TranslationManager {
     return TranslationManager.instance
   }
 
-  async loadTranslations(language: UILanguage) {
-    const translations = await prisma.localeSettings.findMany({
+  // For testing purposes
+  static resetInstance(): void {
+    TranslationManager.instance = null;
+  }
+
+  setPrismaClient(client: PrismaClientWithLocale): void {
+    this.prismaClient = client;
+  }
+
+  async loadTranslations(language: UILanguage): Promise<void> {
+    const translations = await this.prismaClient.localeSettings.findMany({
       where: { language }
     })
 
@@ -29,7 +56,7 @@ class TranslationManager {
     this.currentLanguage = language
   }
 
-  async setLanguage(language: UILanguage) {
+  async setLanguage(language: UILanguage): Promise<void> {
     if (language !== this.currentLanguage) {
       await this.loadTranslations(language)
     }
@@ -49,8 +76,6 @@ class TranslationManager {
 export const translationManager = TranslationManager.getInstance()
 
 // React hook for using translations
-import { useState, useEffect } from 'react'
-
 export function useTranslation() {
   const [isLoading, setIsLoading] = useState(true)
 

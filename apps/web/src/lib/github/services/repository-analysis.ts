@@ -1,5 +1,6 @@
 import { GitHubIntegrationService } from './github-integration';
 import { LLMService } from '../../llm/llm-service';
+import { RepositoryAnalysis as LLMRepositoryAnalysis } from '../types/repository';
 
 export interface RepositoryMetrics {
   stars: number;
@@ -34,7 +35,7 @@ export interface RepositoryData {
   forks_count: number;
   open_issues_count: number;
   default_branch: string;
-  visibility: string;
+  visibility: string | undefined;
   archived: boolean;
   disabled: boolean;
 }
@@ -47,7 +48,7 @@ export interface Dependency {
 
 export type LanguageData = Record<string, number>;
 
-export interface RepositoryAnalysis {
+export interface InternalRepositoryAnalysis {
   id: number;
   name: string;
   fullName: string;
@@ -59,7 +60,7 @@ export interface RepositoryAnalysis {
   pushedAt: string;
   size: number;
   defaultBranch: string;
-  visibility: string;
+  visibility: string | undefined;
   archived: boolean;
   disabled: boolean;
   metrics: RepositoryMetrics;
@@ -72,15 +73,10 @@ export class GitHubRepositoryAnalysisService extends GitHubIntegrationService {
 
   constructor(token: string, userId: string) {
     super(token, userId);
-    this.llmService = new LLMService({
-      apiKey: process.env.CLAUDE_API_KEY || '',
-      model: process.env.CLAUDE_MODEL || 'claude-3-sonnet',
-      temperature: 0.7,
-      maxTokens: 2000
-    });
+    this.llmService = new LLMService();
   }
 
-  async analyzeRepository(owner: string, repo: string): Promise<RepositoryAnalysis> {
+  async analyzeRepository(owner: string, repo: string): Promise<InternalRepositoryAnalysis> {
     const [repoData, languages, packageJson] = await Promise.all([
       this.fetchRepositoryData(owner, repo),
       this.fetchLanguages(owner, repo),
@@ -119,19 +115,34 @@ export class GitHubRepositoryAnalysisService extends GitHubIntegrationService {
   }
 
   private async fetchRepositoryData(owner: string, repo: string): Promise<RepositoryData> {
-    return this.fetchWithRateLimit<RepositoryData>(`/repos/${owner}/${repo}`);
+    return this.rateLimiter.executeWithRateLimit(async () => {
+      const { data } = await this.octokit.repos.get({ owner, repo });
+      return data as unknown as RepositoryData;
+    });
   }
 
   private async fetchLanguages(owner: string, repo: string): Promise<LanguageData> {
-    return this.fetchWithRateLimit<LanguageData>(`/repos/${owner}/${repo}/languages`);
+    return this.rateLimiter.executeWithRateLimit(async () => {
+      const { data } = await this.octokit.repos.listLanguages({ owner, repo });
+      return data;
+    });
   }
 
   private async fetchPackageJson(owner: string, repo: string): Promise<PackageJsonData | null> {
     try {
-      const response = await this.fetchRaw(`/repos/${owner}/${repo}/contents/package.json`);
-      const data = await response.json();
-      const content = Buffer.from(data.content, 'base64').toString('utf-8');
-      return JSON.parse(content) as PackageJsonData;
+      const { data } = await this.rateLimiter.executeWithRateLimit(async () => {
+        return this.octokit.repos.getContent({
+          owner,
+          repo,
+          path: 'package.json'
+        });
+      });
+
+      if ('content' in data) {
+        const content = Buffer.from(data.content, 'base64').toString('utf-8');
+        return JSON.parse(content) as PackageJsonData;
+      }
+      return null;
     } catch (error) {
       console.error('Error fetching package.json:', error);
       return null;
@@ -217,9 +228,28 @@ export class GitHubRepositoryAnalysisService extends GitHubIntegrationService {
 
   async generateReport(owner: string, repo: string) {
     const analysis = await this.analyzeRepository(owner, repo);
-    return this.llmService.generateRepositoryReport({
-      metrics: analysis.metrics,
+    const llmAnalysis: LLMRepositoryAnalysis = {
+      id: analysis.id.toString(),
+      name: analysis.name,
+      fullName: analysis.fullName,
+      description: analysis.description,
+      private: analysis.private,
+      visibility: analysis.visibility,
+      defaultBranch: analysis.defaultBranch,
+      archived: analysis.archived,
+      disabled: analysis.disabled,
+      metrics: {
+        stars: analysis.metrics.stars,
+        forks: analysis.metrics.forks,
+        issues: analysis.metrics.issues,
+        watchers: analysis.metrics.watchers
+      },
       techStack: analysis.techStack
+    };
+
+    return this.llmService.generateRepositoryReport(llmAnalysis, {
+      model: process.env.CLAUDE_MODEL || 'claude-3-sonnet',
+      requestId: `${owner}/${repo}-${Date.now()}`
     });
   }
 

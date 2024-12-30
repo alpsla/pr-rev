@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@next-auth/prisma-adapter": "^1.0.7",
+    "@octokit/plugin-rest-endpoint-methods": "^13.2.6",
     "@octokit/rest": "^20.0.2",
     "@prisma/client": "^5.7.1",
     "@radix-ui/react-toast": "^1.2.4",
@@ -31,8 +32,15 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/plugin-transform-modules-commonjs": "^7.26.3",
+    "@babel/plugin-transform-runtime": "^7.25.9",
+    "@babel/preset-env": "^7.26.0",
+    "@babel/preset-typescript": "^7.26.0",
+    "@babel/runtime-corejs3": "^7.26.0",
     "@octokit/types": "^13.6.2",
     "@supabase/postgrest-js": "^1.17.7",
+    "@swc/jest": "^0.2.37",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^14.5.2",

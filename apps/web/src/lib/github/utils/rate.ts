@@ -1,32 +1,44 @@
 // src/lib/github/utils/rate.ts
 interface RateLimitConfig {
-    maxRequests: number;
-    windowMs: number;
+  maxRequests: number;
+  windowMs: number;
+  timeProvider?: () => number;
+}
+
+export class RateLimit {
+  private requestCount: number = 0;
+  private windowStart: number = 0;
+  private readonly maxRequests: number;
+  private readonly windowMs: number;
+  private readonly timeProvider: () => number;
+
+  constructor(config: RateLimitConfig) {
+    this.maxRequests = config.maxRequests;
+    this.windowMs = config.windowMs;
+    this.timeProvider = config.timeProvider || (() => Date.now());
+    this.windowStart = this.timeProvider();
   }
-  
-  export class RateLimit {
-    private timestamps: number[] = [];
-    private readonly maxRequests: number;
-    private readonly windowMs: number;
-  
-    constructor(config: RateLimitConfig) {
-      this.maxRequests = config.maxRequests;
-      this.windowMs = config.windowMs;
+
+  async checkLimit(): Promise<boolean> {
+    // Don't allow any requests if maxRequests is 0
+    if (this.maxRequests === 0) {
+      return false;
     }
-  
-    async checkLimit(): Promise<boolean> {
-      this.clearOldTimestamps();
-      if (this.timestamps.length >= this.maxRequests) {
-        return false;
-      }
-      this.timestamps.push(Date.now());
+
+    const now = this.timeProvider();
+
+    // Check if we need to start a new window
+    if (now - this.windowStart >= this.windowMs) {
+      this.windowStart = now;
+      this.requestCount = 0;
+    }
+
+    // Check if we can allow another request
+    if (this.requestCount < this.maxRequests) {
+      this.requestCount++;
       return true;
     }
-  
-    private clearOldTimestamps(): void {
-      const now = Date.now();
-      this.timestamps = this.timestamps.filter(
-        timestamp => now - timestamp < this.windowMs
-      );
-    }
+
+    return false;
   }
+}
