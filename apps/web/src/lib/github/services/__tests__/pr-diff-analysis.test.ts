@@ -50,6 +50,32 @@ describe('PR Diff Analysis', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prAnalysisService = new GitHubPRAnalysisService(mockToken, mockUserId) as TestPRAnalysisService;
+
+    // Mock PR data
+    prAnalysisService.octokit.pulls.get.mockResolvedValue({
+      data: {
+        id: 1,
+        number: 1,
+        title: 'Test PR',
+        body: 'Test PR description',
+        state: 'open',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-02T00:00:00Z',
+        closed_at: null,
+        merged_at: null,
+        draft: false,
+        user: {
+          login: 'testuser',
+          id: 1,
+          type: 'User'
+        }
+      }
+    });
+
+    // Mock PR reviews
+    prAnalysisService.octokit.pulls.listReviews.mockResolvedValue({
+      data: []
+    });
   });
 
   afterEach(async () => {

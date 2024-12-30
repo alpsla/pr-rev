@@ -5,6 +5,10 @@ type MockedOctokit = {
   pulls: {
     listReviews: jest.Mock;
     get: jest.Mock;
+    listFiles: jest.Mock;
+  };
+  checks: {
+    listForRef: jest.Mock;
   };
   auth: jest.Mock;
 };
@@ -13,6 +17,7 @@ type MockedOctokit = {
 type TestPRAnalysisService = GitHubPRAnalysisService & {
   octokit: MockedOctokit;
   rateLimiter: {
+    executeWithRateLimit: jest.Mock;
     close: jest.Mock;
   };
 };
@@ -22,8 +27,19 @@ jest.mock('@octokit/rest', () => ({
     pulls: {
       listReviews: jest.fn(),
       get: jest.fn(),
+      listFiles: jest.fn(),
+    },
+    checks: {
+      listForRef: jest.fn(),
     },
     auth: jest.fn().mockResolvedValue({ token: 'mocked-token' })
+  }))
+}));
+
+jest.mock('../rate-limiter', () => ({
+  RateLimiter: jest.fn().mockImplementation(() => ({
+    executeWithRateLimit: jest.fn(fn => fn()),
+    close: jest.fn()
   }))
 }));
 
@@ -45,6 +61,8 @@ describe('PR Analysis Error Handling', () => {
     it('should handle GitHub API errors', async () => {
       const error = new Error('API Error');
       prAnalysisService.octokit.pulls.get.mockRejectedValueOnce(error);
+      prAnalysisService.octokit.pulls.listFiles.mockRejectedValueOnce(error);
+      prAnalysisService.octokit.pulls.listReviews.mockRejectedValueOnce(error);
 
       await expect(prAnalysisService.analyzePR('owner', 'repo', 1))
         .rejects
@@ -54,6 +72,8 @@ describe('PR Analysis Error Handling', () => {
     it('should handle rate limit errors', async () => {
       const rateLimitError = new Error('API rate limit exceeded');
       prAnalysisService.octokit.pulls.get.mockRejectedValueOnce(rateLimitError);
+      prAnalysisService.octokit.pulls.listFiles.mockRejectedValueOnce(rateLimitError);
+      prAnalysisService.octokit.pulls.listReviews.mockRejectedValueOnce(rateLimitError);
 
       await expect(prAnalysisService.analyzePR('owner', 'repo', 1))
         .rejects
@@ -63,6 +83,8 @@ describe('PR Analysis Error Handling', () => {
     it('should handle network errors', async () => {
       const networkError = new Error('Network Error');
       prAnalysisService.octokit.pulls.get.mockRejectedValueOnce(networkError);
+      prAnalysisService.octokit.pulls.listFiles.mockRejectedValueOnce(networkError);
+      prAnalysisService.octokit.pulls.listReviews.mockRejectedValueOnce(networkError);
 
       await expect(prAnalysisService.analyzePR('owner', 'repo', 1))
         .rejects

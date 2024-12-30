@@ -1,4 +1,4 @@
-import { translationManager, useTranslation } from '../translations';
+import { translationManager, useTranslation, TranslationManager } from '../translations';
 import { renderHook, act } from '@testing-library/react';
 
 // Mock prisma before importing
@@ -19,9 +19,13 @@ describe('TranslationManager', () => {
   beforeEach(() => {
     // Reset mocks before each test
     jest.clearAllMocks();
-    // Reset translations map
-    translationManager['translations'].clear();
-    translationManager['currentLanguage'] = 'EN';
+    // Reset translations map and instance
+    TranslationManager.resetInstance();
+    // Get new instance and set mock client
+    const instance = TranslationManager.getInstance();
+    instance.setPrismaClient(prisma);
+    // Set mock client on exported instance too
+    translationManager.setPrismaClient(prisma);
   });
 
   describe('loadTranslations', () => {
@@ -66,8 +70,10 @@ describe('TranslationManager', () => {
   describe('setLanguage', () => {
     beforeEach(() => {
       // Reset translations and mock
-      translationManager['translations'].clear();
-      translationManager['currentLanguage'] = 'EN';
+      TranslationManager.resetInstance();
+      const instance = TranslationManager.getInstance();
+      instance.setPrismaClient(prisma);
+      translationManager.setPrismaClient(prisma);
       jest.clearAllMocks();
     });
 
@@ -158,8 +164,10 @@ describe('TranslationManager', () => {
 describe('useTranslation hook', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    translationManager['translations'].clear();
-    translationManager['currentLanguage'] = 'EN';
+    TranslationManager.resetInstance();
+    const instance = TranslationManager.getInstance();
+    instance.setPrismaClient(prisma);
+    translationManager.setPrismaClient(prisma);
   });
 
   it('should start with loading state', async () => {

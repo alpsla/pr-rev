@@ -1,135 +1,261 @@
+import { Octokit } from '@octokit/rest';
 import { RateLimiter } from '../rate-limiter';
-import { prisma } from '../../../prisma';
 
-// Create a type for our mocked Prisma client
-type MockPrismaClient = {
-  keyValueStore: {
-    findUnique: jest.Mock;
-    upsert: jest.Mock;
+jest.mock('@octokit/rest');
+
+type RateLimitResponse = {
+  data: {
+    resources: {
+      core: {
+        limit: number;
+        remaining: number;
+        reset: number;
+      };
+    };
   };
-  $disconnect: jest.Mock;
 };
 
-// Mock the Prisma client
-jest.mock('../../../prisma', () => ({
-  prisma: {
-    keyValueStore: {
-      findUnique: jest.fn(),
-      upsert: jest.fn(),
-    },
-    $disconnect: jest.fn()
-  } as MockPrismaClient
-}));
-
-// Cast the mocked prisma client to our mock type
-const mockPrisma = prisma as unknown as MockPrismaClient;
-
 describe('RateLimiter', () => {
+  let octokit: jest.Mocked<Octokit>;
   let rateLimiter: RateLimiter;
-  const userId = 'test-user';
+  let mockGet: jest.Mock<Promise<RateLimitResponse>>;
+  let currentTime: number;
+  let realDateNow: () => number;
 
   beforeEach(() => {
+    jest.useFakeTimers();
+    currentTime = 1000000000000; // Fixed timestamp
+    realDateNow = Date.now;
+    Date.now = jest.fn(() => currentTime);
+    
+    const resetTime = Math.floor(currentTime / 1000) + 3600;
+    
+    mockGet = jest.fn().mockResolvedValue({
+      data: {
+        resources: {
+          core: {
+            limit: 5000,
+            remaining: 4999,
+            reset: resetTime,
+          },
+        },
+      },
+    });
+
+    octokit = {
+      rateLimit: {
+        get: mockGet,
+      },
+    } as unknown as jest.Mocked<Octokit>;
+
+    rateLimiter = new RateLimiter(octokit);
+  });
+
+  afterEach(() => {
+    if (rateLimiter) {
+      rateLimiter.close();
+    }
     jest.clearAllMocks();
-    rateLimiter = new RateLimiter(userId);
+    jest.clearAllTimers();
+    jest.useRealTimers();
+    Date.now = realDateNow;
   });
 
-  afterEach(async () => {
-    await rateLimiter.close();
-  });
-
-  describe('Rate Limiting', () => {
-    it('should execute operation when rate limit is not exceeded', async () => {
-      mockPrisma.keyValueStore.findUnique
-        .mockResolvedValueOnce({ key: 'rate_limit:test-user', value: JSON.stringify({ remaining: 100, reset: Date.now() / 1000 + 3600, limit: 1000 }) })
-        .mockResolvedValueOnce({ key: 'last_request:test-user', value: new Date(Date.now() - 2000).toISOString() });
-
-      const operation = jest.fn().mockResolvedValue('success');
-      const result = await rateLimiter.executeWithRateLimit(operation);
-
-      expect(result).toBe('success');
-      expect(operation).toHaveBeenCalledTimes(1);
+  describe('basic functionality', () => {
+    it('should check rate limit on first request', async () => {
+      await rateLimiter.checkRateLimit();
+      expect(mockGet).toHaveBeenCalledTimes(1);
     });
 
-    it('should wait when rate limit is exceeded', async () => {
-      const resetTime = Math.floor(Date.now() / 1000) + 1;
-      mockPrisma.keyValueStore.findUnique
-        .mockResolvedValueOnce({ key: 'rate_limit:test-user', value: JSON.stringify({ remaining: 0, reset: resetTime, limit: 1000 }) })
-        .mockResolvedValueOnce({ key: 'last_request:test-user', value: new Date().toISOString() });
+    it('should not check rate limit within 5 minutes of last check', async () => {
+      await rateLimiter.checkRateLimit();
+      await rateLimiter.checkRateLimit();
+      expect(mockGet).toHaveBeenCalledTimes(1);
+    });
 
-      const operation = jest.fn().mockResolvedValue('success');
-      const startTime = Date.now();
+    it('should execute operation with rate limit check', async () => {
+      const operation = jest.fn().mockResolvedValue('result');
+      const result = await rateLimiter.executeWithRateLimit(operation);
       
-      const result = await rateLimiter.executeWithRateLimit(operation);
-      const endTime = Date.now();
-
-      expect(result).toBe('success');
-      expect(endTime - startTime).toBeGreaterThanOrEqual(1000);
+      expect(result).toBe('result');
+      expect(mockGet).toHaveBeenCalledTimes(1);
       expect(operation).toHaveBeenCalledTimes(1);
     });
 
-    it('should enforce minimum delay between requests', async () => {
-      mockPrisma.keyValueStore.findUnique
-        .mockResolvedValueOnce({ key: 'rate_limit:test-user', value: JSON.stringify({ remaining: 100, reset: Date.now() / 1000 + 3600, limit: 1000 }) })
-        .mockResolvedValueOnce({ key: 'last_request:test-user', value: new Date().toISOString() });
-
-      const operation = jest.fn().mockResolvedValue('success');
-      const startTime = Date.now();
-      
-      const result = await rateLimiter.executeWithRateLimit(operation);
-      const endTime = Date.now();
-
-      expect(result).toBe('success');
-      expect(endTime - startTime).toBeGreaterThanOrEqual(1000);
-      expect(operation).toHaveBeenCalledTimes(1);
+    it('should update rate limit', async () => {
+      await rateLimiter.updateRateLimit();
+      expect(mockGet).toHaveBeenCalledTimes(1);
     });
 
-    it('should retry operation on rate limit error', async () => {
-      mockPrisma.keyValueStore.findUnique
-        .mockResolvedValue({ key: 'rate_limit:test-user', value: JSON.stringify({ remaining: 100, reset: Date.now() / 1000 + 3600, limit: 1000 }) });
-
-      const operation = jest.fn()
-        .mockRejectedValueOnce(new Error('rate limit exceeded'))
-        .mockResolvedValueOnce('success');
-
-      const result = await rateLimiter.executeWithRateLimit(operation);
-
-      expect(result).toBe('success');
-      expect(operation).toHaveBeenCalledTimes(2);
+    it('should throw error when closed', async () => {
+      rateLimiter.close();
+      await expect(rateLimiter.checkRateLimit()).rejects.toThrow('RateLimiter has been closed');
+      await expect(rateLimiter.executeWithRateLimit(() => Promise.resolve())).rejects.toThrow('RateLimiter has been closed');
+      expect(() => rateLimiter.getRemainingRequests()).toThrow('RateLimiter has been closed');
+      expect(() => rateLimiter.getResetTime()).toThrow('RateLimiter has been closed');
     });
   });
 
-  describe('Rate Limit Info', () => {
-    it('should update rate limit info', async () => {
-      const info = {
-        remaining: 100,
-        reset: Math.floor(Date.now() / 1000) + 3600,
-        limit: 1000
-      };
+  describe('rate limit handling', () => {
+    beforeEach(() => {
+      // Force rate limit check by advancing time by 5 minutes
+      currentTime += 5 * 60 * 1000 + 1;
+      jest.setSystemTime(currentTime);
+      // Update Date.now mock
+      Date.now = jest.fn(() => currentTime);
+    });
 
-      await rateLimiter.updateRateLimit(info);
-
-      expect(mockPrisma.keyValueStore.upsert).toHaveBeenCalledWith({
-        where: { key: `rate_limit:${userId}` },
-        update: { value: JSON.stringify(info) },
-        create: { key: `rate_limit:${userId}`, value: JSON.stringify(info) }
+    it('should throw error when rate limit is exceeded', async () => {
+      const resetTime = Math.floor(currentTime / 1000) + 60;
+      mockGet.mockResolvedValueOnce({
+        data: {
+          resources: {
+            core: {
+              limit: 5000,
+              remaining: 0,
+              reset: resetTime,
+            },
+          },
+        },
       });
+
+      await expect(rateLimiter.checkRateLimit()).rejects.toThrow('Rate limit exceeded');
+      expect(mockGet).toHaveBeenCalledTimes(1);
     });
 
-    it('should handle missing rate limit info', async () => {
-      mockPrisma.keyValueStore.findUnique.mockResolvedValue(null);
+    it('should retry operation when rate limit recovers', async () => {
+      const resetTime = Math.floor(currentTime / 1000) + 60;
+      
+      // First call: Rate limit exceeded
+      mockGet.mockResolvedValueOnce({
+        data: {
+          resources: {
+            core: {
+              limit: 5000,
+              remaining: 0,
+              reset: resetTime,
+            },
+          },
+        },
+      });
 
-      const operation = jest.fn().mockResolvedValue('success');
-      const result = await rateLimiter.executeWithRateLimit(operation);
+      // Second call: Rate limit recovered
+      mockGet.mockResolvedValueOnce({
+        data: {
+          resources: {
+            core: {
+              limit: 5000,
+              remaining: 5000,
+              reset: resetTime + 3600,
+            },
+          },
+        },
+      });
 
-      expect(result).toBe('success');
+      const operation = jest.fn().mockResolvedValue('result');
+      const promise = rateLimiter.executeWithRateLimit(operation);
+
+      // Advance time past reset
+      currentTime += 61 * 1000;
+      Date.now = jest.fn(() => currentTime);
+      jest.advanceTimersByTime(61 * 1000);
+
+      const result = await promise;
+      expect(result).toBe('result');
+      expect(mockGet).toHaveBeenCalledTimes(2);
       expect(operation).toHaveBeenCalledTimes(1);
     });
-  });
 
-  describe('Cleanup', () => {
-    it('should disconnect from database on close', async () => {
-      await rateLimiter.close();
-      expect(mockPrisma.$disconnect).toHaveBeenCalled();
+    it('should fail after max retries with rate limit error', async () => {
+      const resetTime = Math.floor(currentTime / 1000) + 60;
+      
+      // Mock to always return 0 remaining
+      mockGet.mockResolvedValue({
+        data: {
+          resources: {
+            core: {
+              limit: 5000,
+              remaining: 0,
+              reset: resetTime,
+            },
+          },
+        },
+      });
+
+      const operation = jest.fn().mockResolvedValue('success');
+      await expect(rateLimiter.executeWithRateLimit(operation, 0))
+        .rejects.toThrow('Rate limit exceeded after max retries');
+
+      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(operation).not.toHaveBeenCalled();
+    });
+
+    it('should handle gradually decreasing rate limits', async () => {
+      const resetTime = Math.floor(currentTime / 1000) + 3600;
+      
+      // First operation: 2 remaining
+      mockGet.mockResolvedValueOnce({
+        data: {
+          resources: {
+            core: {
+              limit: 5000,
+              remaining: 2,
+              reset: resetTime,
+            },
+          },
+        },
+      });
+
+      const operation1 = jest.fn().mockResolvedValue('result1');
+      await expect(rateLimiter.executeWithRateLimit(operation1)).resolves.toBe('result1');
+      expect(operation1).toHaveBeenCalledTimes(1);
+
+      // Force rate limit check by advancing time
+      currentTime += 5 * 60 * 1000 + 1;
+      jest.setSystemTime(currentTime);
+      Date.now = jest.fn(() => currentTime);
+
+      // Second operation: 1 remaining
+      mockGet.mockResolvedValueOnce({
+        data: {
+          resources: {
+            core: {
+              limit: 5000,
+              remaining: 1,
+              reset: resetTime,
+            },
+          },
+        },
+      });
+
+      const operation2 = jest.fn().mockResolvedValue('result2');
+      await expect(rateLimiter.executeWithRateLimit(operation2)).resolves.toBe('result2');
+      expect(operation2).toHaveBeenCalledTimes(1);
+
+      // Force rate limit check by advancing time
+      currentTime += 5 * 60 * 1000 + 1;
+      jest.setSystemTime(currentTime);
+      Date.now = jest.fn(() => currentTime);
+
+      // Third operation: 0 remaining
+      mockGet.mockResolvedValueOnce({
+        data: {
+          resources: {
+            core: {
+              limit: 5000,
+              remaining: 0,
+              reset: resetTime,
+            },
+          },
+        },
+      });
+
+      const operation3 = jest.fn().mockResolvedValue('result3');
+      await expect(rateLimiter.executeWithRateLimit(operation3, 0))
+        .rejects.toThrow('Rate limit exceeded after max retries');
+      expect(operation3).not.toHaveBeenCalled();
+
+      expect(mockGet).toHaveBeenCalledTimes(4); // Initial check + 3 operation checks
     });
   });
 });
