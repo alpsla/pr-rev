@@ -1,16 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Input, Button, Alert, AlertDescription } from '@pr-rev/ui';
-import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
-import { PRValidator, PRValidationError } from '../lib/github/services/pr-validator';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
+import { PRValidator } from '../lib/github/services/pr-validator';
+import { signIn } from 'next-auth/react';
 
 interface Props {
-  onSubmit: (url: string) => Promise<void>;
-  githubToken: string;
+  githubToken?: string;
 }
 
-export function PRInputForm({ onSubmit, githubToken }: Props) {
+export function PRInputForm({ githubToken }: Props) {
   const [url, setUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -18,6 +20,7 @@ export function PRInputForm({ onSubmit, githubToken }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    console.log('Form submitted with URL:', url);
 
     const trimmedUrl = url.trim();
     if (!trimmedUrl) {
@@ -27,14 +30,45 @@ export function PRInputForm({ onSubmit, githubToken }: Props) {
 
     try {
       setIsLoading(true);
-      const validator = new PRValidator(githubToken);
-      await validator.validatePR(trimmedUrl);
-      await onSubmit(trimmedUrl);
+
+      // Parse the URL first to validate format
+      const prInfo = PRValidator.parsePRUrl(trimmedUrl);
+      if (!prInfo) {
+        setError('Invalid PR URL format');
+        return;
+      }
+
+      // If no token, redirect to auth immediately
+      if (!githubToken) {
+        console.log('No token available, redirecting to GitHub auth');
+        const reviewUrl = `/review?pr=${encodeURIComponent(trimmedUrl)}`;
+        
+        // Use NextAuth's signIn directly with GitHub provider
+        const result = await signIn('github', {
+          callbackUrl: reviewUrl,
+          redirect: false
+        });
+
+        console.log('SignIn result:', result);
+
+        if (result?.error) {
+          setError('Authentication failed: ' + result.error);
+        } else if (result?.url) {
+          // Redirect to GitHub OAuth
+          window.location.href = result.url;
+        }
+        return;
+      }
+
+      // If we have a token, go directly to review page
+      const reviewUrl = `/review?pr=${encodeURIComponent(trimmedUrl)}`;
+      window.location.href = reviewUrl;
+      
     } catch (err) {
-      if (err instanceof PRValidationError) {
+      console.error('Error handling PR:', err);
+      if (err instanceof Error) {
         setError(err.message);
       } else {
-        console.error('PR validation error:', err);
         setError('Failed to process PR URL');
       }
     } finally {
@@ -68,13 +102,13 @@ export function PRInputForm({ onSubmit, githubToken }: Props) {
 
       {error && (
         <Alert variant="destructive" className="items-center" role="alert" aria-live="polite" id="pr-url-error">
-          <ExclamationTriangleIcon className="h-4 w-4" aria-hidden="true" />
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      <Button 
-        type="submit" 
+      <Button
+        type="submit"
         disabled={isLoading}
         aria-busy={isLoading}
         className="w-full"

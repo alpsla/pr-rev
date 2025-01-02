@@ -1,18 +1,21 @@
 module.exports = {
   presets: [
-    ['@babel/preset-env', { 
-      targets: { node: 'current' },
-      modules: 'commonjs'
-    }],
-    '@babel/preset-typescript',
+    [
+      'next/babel',
+      {
+        'preset-env': {
+          useBuiltIns: false,
+          corejs: false
+        }
+      }
+    ]
   ],
   plugins: [
     ['@babel/plugin-transform-runtime', {
-      corejs: { version: 3, proposals: true },
+      corejs: false,
       helpers: true,
-      regenerator: true,
-      useESModules: false,
-      version: '^7.26.0'
+      regenerator: true
     }],
-  ],
+    '@babel/plugin-transform-class-static-block'
+  ]
 };
