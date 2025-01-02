@@ -1,7 +1,7 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "../../../../../lib/auth/auth-options";
-import { RepositoryAccessService } from "../../../../../lib/github/services/repository-access";
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../../../../../lib/auth/auth-options';
+import { RepositoryAccessService } from '../../../../../lib/github/services/repository-access';
 
 interface ReviewPageProps {
   params: {
@@ -12,58 +12,98 @@ interface ReviewPageProps {
 }
 
 export default async function ReviewPage({ params }: ReviewPageProps) {
-  let isPublic = false;
+  const session = await getServerSession(authOptions);
+  console.log('[ReviewPage] Initial session state:', {
+    hasSession: !!session,
+    hasUser: !!session?.user,
+    hasGithubToken: !!session?.user?.githubToken,
+    scope: session?.user?.scope,
+    hasPrivateAccess: session?.user?.hasPrivateAccess,
+    params
+  });
 
-  try {
-    // Get session first to check if we're authenticated
-    const session = await getServerSession(authOptions);
-    console.log('Session in review page:', {
-      hasSession: !!session,
-      hasUser: !!session?.user,
-      hasGithubToken: !!session?.user?.githubToken,
-      hasAccessToken: !!session?.user?.accessToken
+  // Check repository visibility
+  const repoAccess = await RepositoryAccessService.fromSession();
+  const isPublic = await repoAccess.isRepositoryPublic(params.owner, params.repo);
+  console.log('[ReviewPage] Repository visibility check:', { 
+    isPublic, 
+    owner: params.owner, 
+    repo: params.repo,
+    hasGithubToken: !!session?.user?.githubToken,
+    scope: session?.user?.scope
+  });
+
+  // If private repo and no GitHub token or missing repo scope, redirect to GitHub OAuth
+  if (!isPublic && (!session?.user?.githubToken || !session?.user?.scope?.includes('repo'))) {
+    console.log('[ReviewPage] Need GitHub auth for private repo:', {
+      hasToken: !!session?.user?.githubToken,
+      scope: session?.user?.scope,
+      needsRepoScope: !session?.user?.scope?.includes('repo')
     });
 
-    // Check repository visibility
-    const repoAccessService = new RepositoryAccessService();
-    isPublic = await repoAccessService.isRepositoryPublic(params.owner, params.repo);
-    console.log('Repository visibility check:', { isPublic, ...params });
-
-    // For private repos, we need authentication
-    if (!isPublic) {
-      if (!session?.user?.githubToken) {
-        console.log('No GitHub token found, redirecting to auth');
-        redirect(`/auth/signin?callbackUrl=/review/${params.owner}/${params.repo}/${params.number}`);
-      }
-
-      // Check if we have access with current token
-      const authenticatedRepoService = new RepositoryAccessService(session.user.githubToken);
-      const hasAccess = await authenticatedRepoService.isRepositoryAccessible(params.owner, params.repo);
-      console.log('Repository access check:', { hasAccess, ...params });
-
-      if (!hasAccess) {
-        console.log('No access to private repo, redirecting to auth');
-        redirect(`/auth/signin?callbackUrl=/review/${params.owner}/${params.repo}/${params.number}`);
-      }
-    }
-  } catch (error) {
-    console.error('Error in review page:', error);
-    throw error;
+    const currentPath = `/review/${params.owner}/${params.repo}/${params.number}`;
+    console.log('[ReviewPage] Redirecting to GitHub OAuth:', { 
+      currentPath, 
+      scope: 'repo',
+      existingScope: session?.user?.scope
+    });
+    
+    redirect(`/api/auth/github?callbackUrl=${encodeURIComponent(currentPath)}&scope=repo`);
   }
 
+  // If private repo and has token, check if we have access
+  if (!isPublic) {
+    console.log('[ReviewPage] Checking private repo access:', {
+      hasToken: !!session?.user?.githubToken,
+      scope: session?.user?.scope
+    });
+
+    const hasAccess = await repoAccess.hasRepositoryAccess(params.owner, params.repo);
+    if (!hasAccess) {
+      console.log('[ReviewPage] No access to private repository:', {
+        owner: params.owner,
+        repo: params.repo,
+        hasToken: !!session?.user?.githubToken,
+        scope: session?.user?.scope
+      });
+      throw new Error('No access to repository');
+    }
+  }
+
+  console.log('[ReviewPage] Access granted:', {
+    isPublic,
+    hasToken: !!session?.user?.githubToken,
+    scope: session?.user?.scope,
+    owner: params.owner,
+    repo: params.repo
+  });
+
   return (
-    <div className="container mx-auto py-10">
-      <h1 className="text-4xl font-bold mb-8">Review Pull Request</h1>
-      <div className="grid gap-4">
-        <div className="p-4 bg-white rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-2">
-            {params.owner}/{params.repo} #{params.number}
-          </h2>
-          <p className="text-gray-600">
-            {isPublic ? 'Public' : 'Private'} Repository
-          </p>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-4">Pull Request Review</h1>
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Repository</h2>
+            <p className="text-gray-600">{params.owner}/{params.repo}</p>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Pull Request</h2>
+            <p className="text-gray-600">#{params.number}</p>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Access</h2>
+            <p className="text-gray-600">{isPublic ? 'Public' : 'Private'}</p>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">GitHub Token</h2>
+            <p className="text-gray-600">{session?.user?.githubToken ? 'Present' : 'Missing'}</p>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Scopes</h2>
+            <p className="text-gray-600">{session?.user?.scope || 'None'}</p>
+          </div>
         </div>
-        {/* Review content will be added here */}
       </div>
     </div>
   );

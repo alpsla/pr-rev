@@ -1,50 +1,49 @@
-import { type NextAuthOptions } from 'next-auth';
-import GithubProvider from 'next-auth/providers/github';
+import type { NextAuthOptions } from "next-auth";
+import type { Session, User, Account } from "next-auth";
+import type { JWT } from "next-auth/jwt";
+import type { AdapterUser } from "next-auth/adapters";
+import GithubProvider from "next-auth/providers/github";
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '../prisma';
 
-type CustomUser = {
-  id: string;
-  name?: string | null;
-  email?: string | null;
-  image?: string | null;
+interface CustomSession extends Session {
+  scope?: string;
   hasPrivateAccess?: boolean;
-  githubToken?: string | null;
-  accessToken?: string | null;
-};
+}
 
-type CustomSession = {
-  expires: string;
-  user?: CustomUser;
-  accessToken?: string | null;
-};
-
-type CustomJWT = {
-  id: string;
-  name?: string | null;
-  email?: string | null;
-  picture?: string | null;
-  sub?: string;
-  hasPrivateAccess?: boolean;
-  githubToken?: string | null;
-};
-
-declare module 'next-auth' {
-  interface Session extends CustomSession {
-    /** @internal */
-    _type: 'session';
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      email?: string | null;
+      name?: string | null;
+      image?: string | null;
+      hasPrivateAccess?: boolean;
+      githubToken?: string | null;
+      scope?: string | null;
+    }
   }
-  
-  interface User extends CustomUser {
-    /** @internal */
-    _type: 'user';
+
+  interface User {
+    id: string;
+    email?: string | null;
+    name?: string | null;
+    image?: string | null;
+    hasPrivateAccess?: boolean;
+    githubToken?: string | null;
+    scope?: string | null;
   }
 }
 
-declare module 'next-auth/jwt' {
-  interface JWT extends CustomJWT {
-    /** @internal */
-    _type: 'jwt';
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    picture?: string | null;
+    hasPrivateAccess?: boolean;
+    githubToken?: string | null;
+    scope?: string | undefined;
   }
 }
 
@@ -55,168 +54,191 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GITHUB_ID ?? '',
       clientSecret: process.env.GITHUB_SECRET ?? '',
       authorization: {
-        url: 'https://github.com/login/oauth/authorize',
+        url: "https://github.com/login/oauth/authorize",
         params: {
-          scope: 'read:user user:email repo',
-          prompt: 'consent',
-          response_type: 'code',
-          access_type: 'offline'
+          scope: "repo read:user user:email",
+          prompt: "consent",
+          response_type: "code"
         }
-      },
-      profile(profile) {
-        return {
-          id: profile.id.toString(),
-          name: profile.name || profile.login,
-          email: profile.email,
-          image: profile.avatar_url,
-          hasPrivateAccess: true,
-          _type: 'user'
-        };
       }
     })
   ],
-  debug: true,
+  debug: process.env.NODE_ENV === 'development',
   session: {
-    strategy: 'jwt',
+    strategy: "jwt" as const,
     maxAge: 30 * 24 * 60 * 60 // 30 days
   },
   pages: {
     signIn: '/auth/signin',
     error: '/auth/error'
   },
-  events: {
-    signIn: ({ user, account, profile }) => {
-      console.log('SignIn Event:', {
-        userId: user.id,
-        hasAccount: !!account,
-        accountType: account?.type,
-        provider: account?.provider,
-        hasProfile: !!profile
-      });
-    },
-    session: ({ session, token }) => {
-      console.log('Session Event:', {
-        hasUser: !!session?.user,
-        hasToken: !!token,
-        tokenKeys: token ? Object.keys(token) : []
-      });
-    }
-  },
   callbacks: {
     redirect({ url, baseUrl }) {
-      console.log('Redirect callback:', { url, baseUrl });
+      console.log('[Auth] Redirect callback:', { url, baseUrl });
 
       // If it's a review page URL, allow it
       if (url.includes('/review/')) {
-        console.log('Allowing review page URL:', url);
+        console.log('[Auth] Allowing review page URL:', url);
+        // If it's a relative URL, make it absolute
+        if (url.startsWith('/')) {
+          const currentUrl = typeof window !== 'undefined'
+            ? window.location.origin
+            : baseUrl;
+          const absoluteUrl = `${currentUrl}${url}`;
+          console.log('[Auth] Converting review URL to absolute:', absoluteUrl);
+          return absoluteUrl;
+        }
         return url;
       }
 
       // If it's a relative URL, make it absolute
       if (url.startsWith('/')) {
-        const absoluteUrl = `${baseUrl}${url}`;
-        console.log('Converting relative URL to absolute:', absoluteUrl);
+        const currentUrl = typeof window !== 'undefined'
+          ? window.location.origin
+          : baseUrl;
+        const absoluteUrl = `${currentUrl}${url}`;
+        console.log('[Auth] Converting relative URL to absolute:', absoluteUrl);
         return absoluteUrl;
       }
 
       // If it's already an absolute URL for our domain, allow it
-      if (url.startsWith(baseUrl)) {
-        console.log('Using absolute URL:', url);
+      if (url.includes('localhost')) {
+        console.log('[Auth] Using absolute URL:', url);
         return url;
       }
 
-      // Default to base URL
-      console.log('Defaulting to base URL');
-      return baseUrl;
+      // Default to current URL
+      const currentUrl = typeof window !== 'undefined'
+        ? window.location.origin
+        : baseUrl;
+      console.log('[Auth] Defaulting to current URL:', currentUrl);
+      return currentUrl;
     },
-    async jwt({ token, user, account }) {
-      console.log('JWT Callback - Input:', { 
+    async jwt({ token, user, account, trigger, session }: { 
+      token: JWT;
+      user: User | AdapterUser | undefined;
+      account: Account | null;
+      trigger?: "signIn" | "signUp" | "update";
+      session?: CustomSession;
+    }) {
+      console.log('[Auth] JWT Callback:', { 
+        trigger,
         hasToken: !!token,
-        tokenKeys: token ? Object.keys(token) : [],
         hasUser: !!user,
-        userKeys: user ? Object.keys(user) : [],
         hasAccount: !!account,
-        accountKeys: account ? Object.keys(account) : [],
-        scopes: account?.scope?.split(' ')
+        accountScope: account?.scope,
+        tokenScope: token?.scope,
+        isInitialSignIn: !!account,
+        sessionScope: session?.scope
       });
       
-      const updatedToken = { ...token };
-      
-      if (user?.id) {
-        console.log('Setting user ID in token:', user.id);
-        updatedToken.id = user.id;
-      }
-      
-      if (account?.access_token) {
-        console.log('Setting GitHub token in JWT', {
-          tokenLength: account.access_token.length,
-          hasScope: !!account.scope,
-          provider: account.provider,
-          type: account.type
+      // Initial sign in
+      if (account && user) {
+        console.log('[Auth] Initial sign in, setting token data:', {
+          accessToken: !!account.access_token,
+          scope: account.scope,
+          hasPrivateAccess: account.scope?.includes('repo')
         });
-        
-        updatedToken.githubToken = account.access_token;
-        updatedToken.accessToken = account.access_token; // For backward compatibility
+
+        // Update token with GitHub data
+        token.githubToken = account.access_token;
+        token.scope = account.scope;
+        token.hasPrivateAccess = account.scope?.includes('repo') ?? false;
         
         try {
           // Store GitHub token during sign in
-          const tokenId = updatedToken.id as string;
-          console.log('Storing GitHub token in database for user:', tokenId);
+          console.log('[Auth] Storing GitHub token in database');
           
-          await prisma.$executeRaw`
-            UPDATE "User"
-            SET "githubToken" = ${account.access_token}::text
-            WHERE id = ${tokenId}::text
-          `;
-          console.log('Successfully stored GitHub token in database');
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              githubToken: account.access_token
+            }
+          });
+
+          // Store scope in Account table since it's part of the OAuth data
+          await prisma.account.update({
+            where: {
+              provider_providerAccountId: {
+                provider: account.provider,
+                providerAccountId: account.providerAccountId
+              }
+            },
+            data: {
+              scope: account.scope
+            }
+          });
+
+          console.log('[Auth] Successfully stored GitHub token and scope');
         } catch (error) {
-          console.error('Error storing GitHub token:', error);
+          console.error('[Auth] Error storing GitHub token:', error);
         }
       }
+
+      // If no token exists yet, try to load from database
+      if (!token.githubToken && user?.id) {
+        console.log('[Auth] No token in session, checking database');
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            include: {
+              accounts: {
+                where: { provider: 'github' },
+                select: { scope: true }
+              }
+            }
+          });
+
+          if (dbUser?.githubToken) {
+            console.log('[Auth] Found token in database, restoring to session');
+            token.githubToken = dbUser.githubToken;
+            // Convert null to undefined for scope
+            token.scope = dbUser.accounts[0]?.scope ?? undefined;
+            token.hasPrivateAccess = token.scope?.includes('repo') ?? false;
+          }
+        } catch (error) {
+          console.error('[Auth] Error loading token from database:', error);
+        }
+      }
+
+      // Update token if session is updated
+      if (trigger === 'update' && session) {
+        console.log('[Auth] Session update, updating token:', {
+          oldScope: token.scope,
+          newScope: session.scope,
+          oldPrivateAccess: token.hasPrivateAccess,
+          newPrivateAccess: session.hasPrivateAccess
+        });
+        token.scope = session.scope;
+        token.hasPrivateAccess = session.hasPrivateAccess;
+      }
       
-      console.log('JWT Callback - Output:', {
-        hasGithubToken: !!updatedToken.githubToken,
-        hasAccessToken: !!updatedToken.accessToken,
-        tokenKeys: Object.keys(updatedToken)
-      });
-      
-      return updatedToken;
+      return token;
     },
-    async session({ session, token }): Promise<CustomSession> {
-      console.log('Session Callback - Input:', {
+    async session({ session, token }: { session: Session; token: JWT }) {
+      console.log('[Auth] Session Callback:', {
         hasSession: !!session,
-        sessionKeys: session ? Object.keys(session) : [],
         hasToken: !!token,
-        tokenKeys: token ? Object.keys(token) : [],
         hasUser: !!session?.user,
-        userKeys: session?.user ? Object.keys(session.user) : []
+        tokenScope: token?.scope,
+        tokenPrivateAccess: token?.hasPrivateAccess,
+        tokenGithubToken: !!token?.githubToken
       });
       
       if (session.user) {
-        console.log('Updating session user with token data');
-        session.user = {
-          ...session.user,
-          id: token.id,
-          name: token.name ?? null,
-          email: token.email ?? null,
-          image: token.picture ?? null,
-          hasPrivateAccess: token.hasPrivateAccess ?? false,
-          githubToken: token.githubToken ?? null,
-          accessToken: token.githubToken ?? null
-        } as CustomUser;
+        session.user.id = token.id;
+        session.user.name = token.name ?? null;
+        session.user.email = token.email ?? null;
+        session.user.image = token.picture ?? null;
+        session.user.hasPrivateAccess = token.hasPrivateAccess ?? false;
+        session.user.githubToken = token.githubToken ?? null;
+        session.user.scope = token.scope ?? null;
       }
       
-      // Set token at session level for backward compatibility
-      if (token.githubToken) {
-        console.log('Setting GitHub token at session level');
-        session.accessToken = token.githubToken;
-      }
-      
-      console.log('Session Callback - Output:', {
+      console.log('[Auth] Session updated:', {
         hasGithubToken: !!session.user?.githubToken,
-        hasAccessToken: !!session.accessToken,
-        sessionKeys: Object.keys(session),
-        userKeys: session.user ? Object.keys(session.user) : []
+        scope: session.user?.scope,
+        hasPrivateAccess: session.user?.hasPrivateAccess
       });
       
       return session;

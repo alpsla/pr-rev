@@ -1,66 +1,86 @@
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
-import { authOptions } from "../../../../lib/auth";
-import { checkRepositoryVisibility } from "../../../../lib/github/services/repository";
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '../../../../lib/auth/auth-options';
+import { RepositoryAccessService } from '../../../../lib/github/services/repository-access';
 
 interface ReviewPageProps {
   params: {
     owner: string;
     repo: string;
   };
-  searchParams: {
-    pr?: string;
-  };
 }
 
-export default async function ReviewPage({ params, searchParams }: ReviewPageProps) {
+export default async function ReviewPage({ params }: ReviewPageProps) {
+  console.log('[ReviewPage] Initial session state:', {
+    hasSession: true,
+    hasUser: true,
+    hasGithubToken: true,
+    scope: 'read:user,repo,user:email',
+    hasPrivateAccess: true,
+    params
+  });
+
   const session = await getServerSession(authOptions);
+  const repoAccess = await RepositoryAccessService.fromSession();
+  const isPublic = await repoAccess.isRepositoryPublic(params.owner, params.repo);
 
-  // Check repository visibility with auth token if available
-  const { isPrivate, error: visibilityError } = await checkRepositoryVisibility(
-    params.owner,
-    params.repo,
-    session?.accessToken as string
-  );
+  console.log('[ReviewPage] Repository visibility check:', {
+    isPublic,
+    owner: params.owner,
+    repo: params.repo,
+    hasGithubToken: !!session?.user?.githubToken,
+    scope: session?.user?.scope
+  });
 
-  // If repository is private and user is not authenticated
-  if (isPrivate && !session) {
-    redirect('/auth/signin');
-  }
+  // For private repos, check if we have the token and proper scope
+  if (!isPublic) {
+    console.log('[ReviewPage] Checking private repo access:', {
+      hasToken: !!session?.user?.githubToken,
+      scope: session?.user?.scope
+    });
 
-  // If there's an error and we're authenticated, show the error
-  if (visibilityError && session) {
-    return (
-      <div className="container mx-auto py-10">
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-          <h2 className="text-red-500 font-medium">Access Error</h2>
-          <p className="text-red-500/80 text-sm mt-1">
-            {visibilityError}. Please ensure you have access to this repository.
-          </p>
-        </div>
-      </div>
-    );
+    // Only redirect to GitHub if we don't have a token or repo scope
+    if (!session?.user?.githubToken || !session?.user?.scope?.includes('repo')) {
+      const currentPath = `/review/${params.owner}/${params.repo}`;
+      redirect(`/api/auth/github?callbackUrl=${encodeURIComponent(currentPath)}&scope=repo`);
+    }
+
+    // If we have a token, verify we can access the repo
+    const hasAccess = await repoAccess.hasRepositoryAccess(params.owner, params.repo);
+    if (!hasAccess) {
+      throw new Error('No access to repository');
+    }
+
+    console.log('[ReviewPage] Access granted:', {
+      isPublic,
+      hasToken: !!session?.user?.githubToken,
+      scope: session?.user?.scope,
+      owner: params.owner,
+      repo: params.repo
+    });
   }
 
   return (
-    <div className="container mx-auto py-10">
-      <h1 className="text-4xl font-bold mb-8">Review Pull Request</h1>
-
-      <div className="grid gap-4">
-        <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-          <h2 className="text-lg font-semibold mb-2">Repository Details</h2>
-          <div className="space-y-1 text-sm">
-            <p><span className="opacity-70">Owner:</span> {params.owner}</p>
-            <p><span className="opacity-70">Repository:</span> {params.repo}</p>
-            <p><span className="opacity-70">Pull Request:</span> #{searchParams.pr}</p>
-            <p><span className="opacity-70">Visibility:</span> {isPrivate ? 'Private' : 'Public'}</p>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-4">Repository Review</h1>
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Repository</h2>
+            <p className="text-gray-600">{params.owner}/{params.repo}</p>
           </div>
-        </div>
-
-        {/* Review analysis will be added here */}
-        <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-          <h2 className="text-lg font-semibold mb-2">Analysis</h2>
-          <p className="text-sm opacity-70">Analysis in progress...</p>
+          <div>
+            <h2 className="text-lg font-semibold">Access</h2>
+            <p className="text-gray-600">{isPublic ? 'Public' : 'Private'}</p>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">GitHub Token</h2>
+            <p className="text-gray-600">{session?.user?.githubToken ? 'Present' : 'Missing'}</p>
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold">Scopes</h2>
+            <p className="text-gray-600">{session?.user?.scope || 'None'}</p>
+          </div>
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import { PRValidator } from '../lib/github/services/pr-validator';
 import { RepositoryAccessService } from '../lib/github/services/repository-access';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
+
 interface Props {
   githubToken?: string;
 }
@@ -22,7 +23,10 @@ export function PRInputForm({ githubToken }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    console.log('Form submitted with URL:', url);
+    console.log('[PRInputForm] Form submitted:', {
+      url,
+      hasGithubToken: !!githubToken
+    });
 
     const trimmedUrl = url.trim();
     if (!trimmedUrl) {
@@ -36,67 +40,75 @@ export function PRInputForm({ githubToken }: Props) {
       // Parse the URL first to validate format
       const prInfo = PRValidator.parsePRUrl(trimmedUrl);
       if (!prInfo) {
+        console.log('[PRInputForm] Invalid PR URL format:', { url: trimmedUrl });
         setError('Invalid PR URL format');
         return;
       }
+      console.log('[PRInputForm] PR URL parsed:', prInfo);
 
       const { owner, repo } = prInfo;
       const repoAccessService = new RepositoryAccessService(githubToken);
 
       // First check if the repository is public
       const isPublic = await repoAccessService.isRepositoryPublic(owner, repo);
-      console.log('Repository visibility check:', { isPublic, owner, repo });
+      console.log('[PRInputForm] Repository visibility check:', { 
+        isPublic, 
+        owner, 
+        repo,
+        hasGithubToken: !!githubToken 
+      });
       
       // Construct review page path
       const reviewPath = `/review/${owner}/${repo}/${prInfo.number}`;
 
       if (isPublic) {
         // For public repos, redirect directly to review page
-        console.log('Public repo detected, redirecting to review page:', reviewPath);
+        console.log('[PRInputForm] Public repo detected, redirecting to:', reviewPath);
         router.push(reviewPath);
         return;
       }
 
       // For private repos, we need auth
       if (!githubToken) {
-        console.log('Private repo detected, redirecting to GitHub auth');
-        console.log('Initiating GitHub OAuth flow with callback:', reviewPath);
+        console.log('[PRInputForm] Private repo detected, no token available');
+        console.log('[PRInputForm] Initiating GitHub OAuth flow with callback:', reviewPath);
         
-        // Initiate GitHub OAuth flow
-        const result = await signIn('github', {
+        // Redirect to GitHub OAuth with proper scopes
+        await signIn('github', {
           callbackUrl: reviewPath,
-          redirect: false
+          redirect: true,
+          scope: 'repo' // Request repo scope for private repo access
         });
-        if (result?.url) {
-          window.location.href = result.url;
-        }
         return;
       }
 
       // Check if we have access to the private repo with current token
       const hasAccess = await repoAccessService.isRepositoryAccessible(owner, repo);
-      console.log('Repository access check:', { hasAccess, owner, repo });
+      console.log('[PRInputForm] Repository access check:', { 
+        hasAccess, 
+        owner, 
+        repo,
+        hasGithubToken: !!githubToken 
+      });
 
       if (!hasAccess) {
-        console.log('No access to private repo, requesting new auth');
+        console.log('[PRInputForm] No access to private repo with current token');
+        console.log('[PRInputForm] Re-authenticating with callback:', reviewPath);
         
         // Re-authenticate with GitHub OAuth flow
-        console.log('Re-authenticating with callback:', reviewPath);
-        const result = await signIn('github', {
+        await signIn('github', {
           callbackUrl: reviewPath,
-          redirect: false
+          redirect: true,
+          scope: 'repo' // Request repo scope for private repo access
         });
-        if (result?.url) {
-          window.location.href = result.url;
-        }
         return;
       }
 
       // We have access to the private repo, proceed to review
-      console.log('Private repo with access, redirecting to review page:', reviewPath);
+      console.log('[PRInputForm] Private repo with access, redirecting to:', reviewPath);
       router.push(reviewPath);
     } catch (err) {
-      console.error('Error handling PR:', err);
+      console.error('[PRInputForm] Error handling PR:', err);
       if (err instanceof Error) {
         setError(err.message);
       } else {
