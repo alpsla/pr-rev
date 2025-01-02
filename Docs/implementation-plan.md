@@ -48,14 +48,6 @@
 - [x] Enhanced error tracking and reporting
 - [x] Automatic retry mechanism for transient failures
 
-### Authentication Enhancements [Future]
-- [ ] GitHub App Integration
-  - [ ] App registration and setup
-  - [ ] Installation token management
-  - [ ] JWT authentication flow
-  - [ ] Enterprise server support
-  - [ ] Personal access token support
-  - [ ] Rate limit optimization per auth type
 
 ### Cache Management
 - [x] Implement intelligent cache size management
@@ -221,6 +213,27 @@
   - [x] Repository access verification (implemented in PRValidator.validatePR)
   - [x] Error handling for invalid/inaccessible PRs (implemented in both validator and form)
   - [x] Basic PR input form UI (implemented with accessibility and loading states)
+
+  ### Authentication Enhancements [Future]
+- [ ] [ ] Core Authentication Setup
+[ ] OAuth Providers
+GitHub Integration
+GitLab Integration
+Azure DevOps/VS Integration
+Google Workspace Integration
+BitBucket Integration (optional)
+[ ] Email Authentication
+Magic Link Sign In
+Email/Password Flow
+Email Verification
+[ ] Social Authentication
+Google Sign In
+Microsoft Account
+[ ] Enterprise Auth
+SSO Integration
+SAML Support
+Active Directory
+
 
 ### Monitoring System [New]
 - [ ] Performance Tracking

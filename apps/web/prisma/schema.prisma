@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -35,14 +38,16 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  githubToken   String?   @db.Text
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime?
+  image          String?
+  githubToken    String?   @db.Text
+  scope          String?   @db.Text
+  hasPrivateAccess Boolean @default(false)
+  accounts       Account[]
+  sessions       Session[]
 }
 
 model VerificationToken {
@@ -61,14 +66,10 @@ model KeyValueStore {
   updatedAt DateTime @updatedAt
 }
 
-model analysis {
+model Analysis {
   id           String   @id @default(cuid())
   repositoryId String
-  name         String
-  fullName     String
-  description  String
-  timestamp    DateTime @default(now())
-  metrics      Json
+  content      String   @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

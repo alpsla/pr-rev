@@ -1,45 +1,49 @@
 import { withAuth } from "next-auth/middleware";
-import { NextResponse } from "next/server";
 
-// Use withAuth to handle authentication
-export default withAuth(
-  function middleware() {
-    return NextResponse.next();
-  },
-  {
-    callbacks: {
-      authorized({ req, token }) {
-        const isAuth = !!token;
-        const isAuthPage = req.nextUrl.pathname.startsWith('/auth');
-        const isApiRoute = req.nextUrl.pathname.startsWith('/api');
-        const isAuthCallback = req.nextUrl.pathname.startsWith('/api/auth/callback');
-
-        // Always allow auth callback route
-        if (isAuthCallback) {
-          return true;
-        }
-
-        // Allow API routes to handle their own auth
-        if (isApiRoute) {
-          return true;
-        }
-
-        // Allow auth pages when not authenticated
-        if (isAuthPage) {
-          return !isAuth;
-        }
-
-        // Require auth for dashboard
-        if (req.nextUrl.pathname.startsWith('/dashboard')) {
-          return isAuth;
-        }
-
-        // Allow all other routes
+export default withAuth({
+  callbacks: {
+    authorized({ token, req }) {
+      const path = req.nextUrl.pathname;
+      console.log('Auth check:', { path, hasToken: !!token });
+      
+      // Always allow auth-related routes
+      if (path.startsWith('/api/auth') || path.startsWith('/auth')) {
+        console.log('Allowing auth route');
         return true;
-      },
-    },
+      }
+
+      // Allow review pages to handle their own auth
+      if (path.startsWith('/review')) {
+        console.log('Allowing review page access');
+        return true;
+      }
+
+      // Allow API routes to handle their own auth
+      if (path.startsWith('/api')) {
+        console.log('Allowing API route access');
+        return true;
+      }
+
+      // Require auth for dashboard
+      if (path.startsWith('/dashboard')) {
+        const hasAccess = !!token;
+        console.log('Checking dashboard access:', { hasAccess });
+        return hasAccess;
+      }
+
+      // Allow all other routes
+      console.log('Allowing public route access');
+      return true;
+    }
   }
-);
+});
 
 // Configure protected routes
-export const config = { matcher: ['/dashboard/:path*', '/auth/:path*', '/api/github/:path*'] };
+export const config = {
+  matcher: [
+    '/dashboard/:path*',
+    '/auth/:path*',
+    '/api/github/:path*',
+    '/review/:path*'
+  ]
+};

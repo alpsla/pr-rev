@@ -1,6 +1,6 @@
 'use client';
 
-import { AuthButton } from '@/components/auth/auth-button';
+import { AuthButton } from '../../../components/auth/auth-button';
 
 export default function SignInPage() {
   return (
