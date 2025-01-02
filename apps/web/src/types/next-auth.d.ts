@@ -1,5 +1,4 @@
 import { DefaultSession, DefaultUser } from "next-auth";
-import { JWT } from "next-auth/jwt";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -12,6 +11,8 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       hasPrivateAccess?: boolean;
+      githubToken?: string | null;
+      accessToken?: string | null;
     } & DefaultSession["user"];
   }
 
@@ -31,5 +32,6 @@ declare module "next-auth/jwt" {
     error?: string;
     hasPrivateAccess?: boolean;
     accessTokenExpires?: number;
+    githubToken?: string | null;
   }
 }

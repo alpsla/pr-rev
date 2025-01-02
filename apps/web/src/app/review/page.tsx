@@ -8,6 +8,7 @@ interface ReviewPageProps {
   params: {
     owner: string;
     repo: string;
+    number: string;
   };
 }
 
